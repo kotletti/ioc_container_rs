@@ -2,6 +2,11 @@
 name = "ioc_container_rs"
 version = "0.0.1"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "IoC container"
+homepage = "https://github.com/kotletti/ioc_container_rs"
+repository = "https://github.com/kotletti/ioc_container_rs"
+readme = "../../README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
