@@ -3,5 +3,12 @@
 version = 3
 
 [[package]]
+name = "example"
+version = "0.0.1"
+dependencies = [
+ "ioc_container_rs",
+]
+
+[[package]]
 name = "ioc_container_rs"
 version = "0.0.1"
