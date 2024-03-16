@@ -1,41 +1,34 @@
-use std::any::Any;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use super::container_store::ContainerStore;
 
 pub struct Container {
-  dependencies:
-    Mutex<HashMap<String, Arc<dyn Fn() -> Box<dyn Any + Send + Sync + 'static> + Send + Sync>>>,
+  store: Arc<ContainerStore>,
 }
 
 impl Container {
   pub fn new() -> Self {
     Self {
-      dependencies: Mutex::new(HashMap::new()),
+      store: Arc::new(ContainerStore::new()),
     }
   }
 
-  pub fn register<T, F>(&self, key: &str, factory: F)
+  pub async fn register<T, F>(&self, token: &'static str, factory: F)
   where
-    T: 'static + Send + Sync,
+    T: Send + Sync + 'static,
     F: Fn() -> T + Send + Sync + 'static,
   {
-    let boxed_factory: Arc<dyn Fn() -> Box<dyn Any + Send + Sync + 'static> + Send + Sync> =
-      Arc::new(move || Box::new(factory()) as Box<dyn Any + Send + Sync>);
-
-    self
-      .dependencies
-      .lock()
-      .unwrap()
-      .insert(key.to_string(), boxed_factory);
+    self.store.add(token, factory).await;
   }
 
-  pub fn resolve<T>(&self, key: &str) -> Option<T>
+  pub async fn resolve<T>(&self, token: &'static str) -> Option<T>
   where
     T: 'static,
   {
-    self.dependencies.lock().unwrap().get(key).map(|factory| {
-      let boxed_instance = factory();
-      *boxed_instance.downcast::<T>().unwrap()
-    })
+    self.store.get::<T>(token).await
+  }
+
+  pub async fn has_provider(&self, token: &'static str) -> bool {
+    self.store.has(&token).await
   }
 }
