@@ -1,11 +1,23 @@
 [package]
-name = "example"
+name = "benchmarks"
 version = "0.1.0"
 edition = "2021"
+
+[[bin]]
+name = "initialize"
+path = "src/initialize.rs"
+
+[[bin]]
+name = "readable"
+path = "src/readable.rs"
+
+[[bin]]
+name = 'writeable'
+path = 'src/writeable.rs'
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 ioc_container_rs = { path = "../ioc_container_rs" }
+tests = { path = "../tests" }
 tokio = { version = "1.36.0", features = ["full"] }
-async-trait = "0.1.77"

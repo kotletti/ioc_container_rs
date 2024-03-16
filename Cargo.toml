@@ -2,5 +2,7 @@
 
 members = [
   "packages/ioc_container_rs",
-  "packages/example"
+  "packages/example",
+  "packages/tests",
+  "packages/benchmarks",
 ]
