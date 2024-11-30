@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use ioc_container_rs::{
   context::{container_context::ContainerContext, context::Context},
   errors::error::Error,
+  ports::adapter_port::AdapterPort,
 };
 
 use crate::{
@@ -26,16 +27,18 @@ impl UserServiceAdapter {
   pub fn new(context: Arc<ContainerContext>) -> Self {
     Self { context }
   }
+}
 
-  pub fn token() -> &'static str {
+#[async_trait]
+impl AdapterPort<UserServiceAdapter> for UserServiceAdapter {
+  fn token() -> &'static str {
     "USER_SERVICE_ADAPTER"
   }
 
-  async fn get_user_repository(&self) -> Result<Box<UserRepositoryAdapter>, Error> {
-    self
-      .context
-      .resolve_provider::<UserRepositoryAdapter>(UserRepositoryAdapter::token())
-      .await
+  async fn get_adapter(context: &Arc<ContainerContext>) -> Result<Box<Self>, Error> {
+    let me = context.resolve_provider::<Self>(Self::token()).await?;
+
+    Ok(me)
   }
 }
 
@@ -47,7 +50,7 @@ impl UserServicePort for UserServiceAdapter {
       email: payload.email.to_string(),
     };
 
-    let user_repository = self.get_user_repository().await?;
+    let user_repository = UserRepositoryAdapter::get_adapter(&self.context).await?;
 
     match user_repository.add_user(&user_entity).await {
       Ok(_) => Ok(user_entity),
@@ -56,7 +59,7 @@ impl UserServicePort for UserServiceAdapter {
   }
 
   async fn delete_user(&self, payload: &DeleteUserPort) -> Result<(), Error> {
-    let user_repository = self.get_user_repository().await?;
+    let user_repository = UserRepositoryAdapter::get_adapter(&self.context).await?;
 
     let user_entity = match user_repository.get_user_by_email(&payload.email).await {
       Ok(Some(user)) => user,
@@ -68,13 +71,13 @@ impl UserServicePort for UserServiceAdapter {
   }
 
   async fn get_user(&self, payload: &GetUserPort) -> Result<Option<UserEntity>, Error> {
-    let user_repository = self.get_user_repository().await?;
+    let user_repository = UserRepositoryAdapter::get_adapter(&self.context).await?;
 
     user_repository.get_user_by_email(&payload.email).await
   }
 
   async fn get_count(&self) -> Result<usize, Error> {
-    let user_repository = self.get_user_repository().await?;
+    let user_repository = UserRepositoryAdapter::get_adapter(&self.context).await?;
 
     user_repository.get_count().await
   }

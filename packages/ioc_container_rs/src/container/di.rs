@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::{
   context::{container_context::ContainerContext, context::Context},
   errors::error::Error,
+  ports::adapter_port::AdapterPort,
 };
 
 pub struct InjectAdapter<T> {
@@ -22,10 +23,7 @@ impl DI {
     Self { context }
   }
 
-  pub async fn inject<T: Send + Sync + 'static>(
-    &self,
-    injector: InjectAdapter<T>,
-  ) -> Result<Self, Error> {
+  pub async fn inject<T: AdapterPort<T>>(&self, injector: InjectAdapter<T>) -> Result<Self, Error> {
     let container = self.context.get_container();
     let factory = injector.factory;
     let context = self.context.clone();

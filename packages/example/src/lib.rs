@@ -8,12 +8,13 @@ use ioc_container_rs::{
   container::di::{InjectAdapter, DI},
   context::{container_context::ContainerContext, context::Context},
   errors::error::Error,
+  ports::adapter_port::AdapterPort,
 };
 use tokio::sync::RwLock;
 
-mod adapters;
-mod entities;
-mod ports;
+pub mod adapters;
+pub mod entities;
+pub mod ports;
 
 pub async fn create_di() -> Result<DI, Error> {
   let store: Arc<RwLock<Vec<UserEntity>>> = Arc::new(RwLock::new(vec![]));

@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ioc_container_rs::errors::error::Error;
+use ioc_container_rs::{
+  context::{container_context::ContainerContext, context::Context},
+  errors::error::Error,
+  ports::adapter_port::AdapterPort,
+};
 use tokio::sync::RwLock;
 
 use crate::{
@@ -16,9 +20,18 @@ impl UserRepositoryAdapter {
   pub fn new(store: Arc<RwLock<Vec<UserEntity>>>) -> Self {
     Self { store }
   }
+}
 
-  pub fn token() -> &'static str {
+#[async_trait]
+impl AdapterPort<UserRepositoryAdapter> for UserRepositoryAdapter {
+  fn token() -> &'static str {
     "USER_REPOSITORY_ADAPTER"
+  }
+
+  async fn get_adapter(context: &Arc<ContainerContext>) -> Result<Box<Self>, Error> {
+    let me = context.resolve_provider::<Self>(Self::token()).await?;
+
+    Ok(me)
   }
 }
 
@@ -50,20 +63,6 @@ impl UserRepositoryPort for UserRepositoryAdapter {
     let store = self.store.read().await;
 
     let index = store.iter().position(|u| u.email == email);
-
-    match index {
-      Some(i) => match store.get(i) {
-        Some(user) => Ok(Some(user.clone())),
-        _ => Ok(None),
-      },
-      _ => Ok(None),
-    }
-  }
-
-  async fn get_user(&self, entity: &UserEntity) -> Result<Option<UserEntity>, Error> {
-    let store = self.store.read().await;
-
-    let index = store.iter().position(|u| u.email == entity.email);
 
     match index {
       Some(i) => match store.get(i) {
