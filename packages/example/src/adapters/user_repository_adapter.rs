@@ -1,17 +1,18 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use ioc_container_rs::errors::error::Error;
 use tokio::sync::RwLock;
 
 use crate::{
   entities::user_entity::UserEntity, ports::output::user_repository_port::UserRepositoryPort,
 };
 
-pub struct Adapter {
+pub struct UserRepositoryAdapter {
   store: Arc<RwLock<Vec<UserEntity>>>,
 }
 
-impl Adapter {
+impl UserRepositoryAdapter {
   pub fn new(store: Arc<RwLock<Vec<UserEntity>>>) -> Self {
     Self { store }
   }
@@ -22,8 +23,8 @@ impl Adapter {
 }
 
 #[async_trait]
-impl UserRepositoryPort for Adapter {
-  async fn add_user(&self, entity: &UserEntity) -> Result<(), String> {
+impl UserRepositoryPort for UserRepositoryAdapter {
+  async fn add_user(&self, entity: &UserEntity) -> Result<(), Error> {
     let mut store = self.store.write().await;
 
     store.push(entity.clone());
@@ -31,7 +32,7 @@ impl UserRepositoryPort for Adapter {
     Ok(())
   }
 
-  async fn delete_user(&self, entity: &UserEntity) -> Result<(), String> {
+  async fn delete_user(&self, entity: &UserEntity) -> Result<(), Error> {
     let mut store = self.store.write().await;
 
     let index = store.iter().position(|u| u.email == entity.email);
@@ -41,11 +42,11 @@ impl UserRepositoryPort for Adapter {
         store.remove(i);
         Ok(())
       }
-      None => Err("User not found for delete.".to_string()),
+      None => Err("User not found for delete.".into()),
     }
   }
 
-  async fn get_user_by_email(&self, email: &str) -> Result<Option<UserEntity>, String> {
+  async fn get_user_by_email(&self, email: &str) -> Result<Option<UserEntity>, Error> {
     let store = self.store.read().await;
 
     let index = store.iter().position(|u| u.email == email);
@@ -59,7 +60,7 @@ impl UserRepositoryPort for Adapter {
     }
   }
 
-  async fn get_user(&self, entity: &UserEntity) -> Result<Option<UserEntity>, String> {
+  async fn get_user(&self, entity: &UserEntity) -> Result<Option<UserEntity>, Error> {
     let store = self.store.read().await;
 
     let index = store.iter().position(|u| u.email == entity.email);
@@ -73,7 +74,7 @@ impl UserRepositoryPort for Adapter {
     }
   }
 
-  async fn get_count(&self) -> Result<usize, String> {
+  async fn get_count(&self) -> Result<usize, Error> {
     let store = self.store.read().await;
 
     Ok(store.len())

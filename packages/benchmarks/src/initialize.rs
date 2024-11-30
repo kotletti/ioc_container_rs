@@ -12,7 +12,11 @@ async fn bench() -> Vec<JoinHandle<()>> {
 
   for _ in 0..THREADS {
     let handle = tokio::spawn(async {
-      create_di().await;
+      let r = create_di().await;
+
+      if r.is_err() {
+        eprintln!("Error: {:?}", &r.err());
+      }
     });
 
     handlers.push(handle);

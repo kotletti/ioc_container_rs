@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::container::container::Container;
+use crate::{container::container::Container, errors::error::Error};
 
 use super::context::Context;
 
@@ -20,22 +20,18 @@ impl ContainerContext {
 
 #[async_trait]
 impl Context for ContainerContext {
-  async fn resolve_provider<P: 'static>(&self, token: &'static str) -> P {
+  async fn resolve_provider<T: 'static>(&self, token: &'static str) -> Result<Box<T>, Error> {
     let has_provider = self.has_provider(token).await;
 
     if has_provider == false {
       panic!("Provider {} has not exists in container", token.to_string());
     }
 
-    self
-      .container
-      .resolve(token)
-      .await
-      .expect(&format!("Cant resolve the {} provider", &token))
+    self.container.resolve(token).await
   }
 
   async fn has_provider(&self, token: &'static str) -> bool {
-    self.container.has_provider(token).await
+    self.container.has_token(token).await
   }
 
   fn get_container(&self) -> Arc<Container> {

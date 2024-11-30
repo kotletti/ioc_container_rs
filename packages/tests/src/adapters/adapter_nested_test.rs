@@ -1,8 +1,24 @@
 use std::sync::Arc;
 
-use ioc_container_rs::context::{container_context::ContainerContext, context::Context};
+use async_trait::async_trait;
+use ioc_container_rs::{
+  context::{container_context::ContainerContext, context::Context},
+  errors::error::Error,
+  ports::adapter_port::AdapterPort,
+};
 
-use super::{adapter_number_test::AdapterNumberTest, adapter_string_test::AdapterStringTest};
+use super::{
+  adapter_number_test::{AdapterNumberTest, AdapterNumberTestPort},
+  adapter_string_test::{AdapterStringTest, AdapterStringTestPort},
+};
+
+#[async_trait]
+pub trait AdapterNestedPort: Sync + Send + 'static {
+  async fn set_number(&self, number: i32) -> Result<(), Error>;
+  async fn set_string(&self, message: &str) -> Result<(), Error>;
+  async fn get_string(&self) -> Result<String, Error>;
+  async fn get_number(&self) -> Result<i32, Error>;
+}
 
 pub struct AdapterNested {
   context: Arc<ContainerContext>,
@@ -12,41 +28,52 @@ impl AdapterNested {
   pub fn new(context: Arc<ContainerContext>) -> Self {
     Self { context }
   }
+}
 
-  pub fn token() -> &'static str {
+#[async_trait]
+impl AdapterPort<AdapterNested> for AdapterNested {
+  fn token() -> &'static str {
     "ADAPTER_NESTED_TEST"
   }
 
-  pub async fn set_number(&self, number: i32) {
-    self
-      .context
-      .resolve_provider::<AdapterNumberTest>(AdapterNumberTest::token())
-      .await
-      .set_number(number);
+  async fn get_adapter(context: &Arc<ContainerContext>) -> Result<Box<Self>, Error> {
+    let me = context.resolve_provider::<Self>(Self::token()).await?;
+
+    Ok(me)
+  }
+}
+
+#[async_trait]
+impl AdapterNestedPort for AdapterNested {
+  async fn set_number(&self, number: i32) -> Result<(), Error> {
+    let mut svc = AdapterNumberTest::get_adapter(&self.context).await?;
+
+    svc.set_number(number);
+
+    Ok(())
   }
 
-  pub async fn set_string(&self, message: &str) {
-    self
-      .context
-      .resolve_provider::<AdapterStringTest>(AdapterStringTest::token())
-      .await
-      .set_message(message.to_string());
+  async fn set_string(&self, message: &str) -> Result<(), Error> {
+    let mut svc = AdapterStringTest::get_adapter(&self.context).await?;
+
+    svc.set_message(message.to_string());
+
+    Ok(())
   }
 
-  pub async fn get_string(&self) -> String {
-    self
-      .context
-      .resolve_provider::<AdapterStringTest>(AdapterStringTest::token())
-      .await
-      .get_message()
-      .to_string()
+  async fn get_string(&self) -> Result<String, Error> {
+    let svc = AdapterStringTest::get_adapter(&self.context).await?;
+
+    let message = svc.get_message().to_string();
+
+    Ok(message)
   }
 
-  pub async fn get_number(&self) -> i32 {
-    self
-      .context
-      .resolve_provider::<AdapterNumberTest>(AdapterNumberTest::token())
-      .await
-      .get_number()
+  async fn get_number(&self) -> Result<i32, Error> {
+    let svc = AdapterNumberTest::get_adapter(&self.context).await?;
+
+    let number = svc.get_number();
+
+    Ok(number)
   }
 }

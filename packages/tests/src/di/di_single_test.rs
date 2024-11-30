@@ -2,10 +2,13 @@
 mod tests {
   use std::sync::Arc;
 
-  use ioc_container_rs::container::di::{InjectAdapter, DI};
-  use ioc_container_rs::context::context::Context;
+  use ioc_container_rs::{
+    container::di::{InjectAdapter, DI},
+    context::context::Context,
+    ports::adapter_port::AdapterPort,
+  };
 
-  use crate::adapters::adapter_string_test::AdapterStringTest;
+  use crate::adapters::adapter_string_test::{AdapterStringTest, AdapterStringTestPort};
 
   #[tokio::test]
   async fn should_be_build_and_resolve_service() {
@@ -16,13 +19,17 @@ mod tests {
       })
       .await;
 
+    assert_eq!(di.is_ok(), true);
+
+    let di = di.unwrap();
+
     let context = di.get_context();
 
-    context
+    let svc = context
       .resolve_provider::<AdapterStringTest>(AdapterStringTest::token())
       .await;
 
-    assert!(true);
+    assert_eq!(svc.is_ok(), true);
   }
 
   #[tokio::test]
@@ -34,13 +41,21 @@ mod tests {
       })
       .await;
 
+    assert_eq!(di.is_ok(), true);
+
+    let di = di.unwrap();
+
     let context = di.get_context();
 
     const NEW_STRING: &str = "Hello, Rust!";
 
-    let mut svc = context
+    let svc = context
       .resolve_provider::<AdapterStringTest>(AdapterStringTest::token())
       .await;
+
+    assert_eq!(svc.is_ok(), true);
+
+    let mut svc = svc.unwrap();
 
     svc.set_message(NEW_STRING.to_string());
 

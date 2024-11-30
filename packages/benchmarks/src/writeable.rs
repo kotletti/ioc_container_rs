@@ -6,8 +6,11 @@ use std::{
 };
 
 use common::create_di::create_di;
-use ioc_container_rs::context::{container_context::ContainerContext, context::Context};
-use tests::adapters::adapter_nested_test::AdapterNested;
+use ioc_container_rs::{
+  context::container_context::ContainerContext, errors::error::Error,
+  ports::adapter_port::AdapterPort,
+};
+use tests::adapters::adapter_nested_test::{AdapterNested, AdapterNestedPort};
 use tokio::task::JoinHandle;
 
 use crate::common::constants::{ITERATIONS, THREADS};
@@ -34,12 +37,12 @@ fn generate_random_string(len: usize) -> String {
   result
 }
 
-async fn write_data(context: &Arc<ContainerContext>) {
-  let svc = context
-    .resolve_provider::<AdapterNested>(AdapterNested::token())
-    .await;
+async fn write_data(context: &Arc<ContainerContext>) -> Result<(), Error> {
+  let svc = AdapterNested::get_adapter(context).await?;
 
-  svc.set_string(&generate_random_string(10)).await;
+  svc.set_string(&generate_random_string(10)).await?;
+
+  Ok(())
 }
 
 async fn bench() -> Vec<JoinHandle<()>> {
@@ -49,7 +52,16 @@ async fn bench() -> Vec<JoinHandle<()>> {
     let handle = tokio::spawn(async {
       let context = create_di().await;
 
-      write_data(&context).await;
+      if context.is_err() {
+        eprintln!("Error creating DI: {:?}", context.err().unwrap());
+        return;
+      }
+
+      let r = write_data(&context.unwrap()).await;
+
+      if r.is_err() {
+        eprintln!("Error writing data: {:?}", r.err().unwrap());
+      }
     });
 
     handlers.push(handle);

@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use adapters::{user_repository_adapter, user_service_adapter};
+use adapters::{
+  user_repository_adapter::UserRepositoryAdapter, user_service_adapter::UserServiceAdapter,
+};
 use entities::user_entity::UserEntity;
 use ioc_container_rs::{
   container::di::{InjectAdapter, DI},
   context::{container_context::ContainerContext, context::Context},
+  errors::error::Error,
 };
 use tokio::sync::RwLock;
 
@@ -12,37 +15,39 @@ mod adapters;
 mod entities;
 mod ports;
 
-pub async fn create_di() -> DI {
+pub async fn create_di() -> Result<DI, Error> {
   let store: Arc<RwLock<Vec<UserEntity>>> = Arc::new(RwLock::new(vec![]));
 
   let user_repository_injector = InjectAdapter {
-    token: user_repository_adapter::Adapter::token(),
-    factory: Arc::new(move |_| user_repository_adapter::Adapter::new(store.clone())),
+    token: UserRepositoryAdapter::token(),
+    factory: Arc::new(move |_| UserRepositoryAdapter::new(store.clone())),
   };
 
   let di = DI::new()
     .inject(user_repository_injector)
-    .await
+    .await?
     .inject(InjectAdapter {
-      token: user_service_adapter::Adapter::token(),
-      factory: Arc::new(user_service_adapter::Adapter::new),
+      token: UserServiceAdapter::token(),
+      factory: Arc::new(UserServiceAdapter::new),
     })
     .await;
 
   di
 }
 
-pub async fn get_user_service(context: &Arc<ContainerContext>) -> user_service_adapter::Adapter {
+pub async fn get_user_service(
+  context: &Arc<ContainerContext>,
+) -> Result<Box<UserServiceAdapter>, Error> {
   context
-    .resolve_provider::<user_service_adapter::Adapter>(user_service_adapter::Adapter::token())
+    .resolve_provider::<UserServiceAdapter>(UserServiceAdapter::token())
     .await
 }
 
 pub async fn get_user_repository(
   context: &Arc<ContainerContext>,
-) -> user_repository_adapter::Adapter {
+) -> Result<Box<UserRepositoryAdapter>, Error> {
   context
-    .resolve_provider::<user_repository_adapter::Adapter>(user_repository_adapter::Adapter::token())
+    .resolve_provider::<UserRepositoryAdapter>(UserRepositoryAdapter::token())
     .await
 }
 
@@ -63,11 +68,23 @@ mod tests {
   async fn should_be_return_zero_count_from_repository() {
     let di = create_di().await;
 
+    assert_eq!(di.is_ok(), true);
+
+    let di = di.unwrap();
+
     let context = di.get_context();
 
     let user_repository = get_user_repository(&context).await;
 
-    let count = user_repository.get_count().await.unwrap();
+    assert_eq!(user_repository.is_ok(), true);
+
+    let user_repository = user_repository.unwrap();
+
+    let count = user_repository.get_count().await;
+
+    assert_eq!(count.is_ok(), true);
+
+    let count = count.unwrap();
 
     assert_eq!(count, 0);
   }
@@ -76,11 +93,23 @@ mod tests {
   async fn should_be_return_zero_count_from_service() {
     let di = create_di().await;
 
+    assert_eq!(di.is_ok(), true);
+
+    let di = di.unwrap();
+
     let context = di.get_context();
 
     let user_service = get_user_service(&context).await;
 
-    let count = user_service.get_count().await.unwrap();
+    assert_eq!(user_service.is_ok(), true);
+
+    let user_service = user_service.unwrap();
+
+    let count = user_service.get_count().await;
+
+    assert_eq!(count.is_ok(), true);
+
+    let count = count.unwrap();
 
     assert_eq!(count, 0);
   }
@@ -89,9 +118,17 @@ mod tests {
   async fn should_return_new_user() {
     let di = create_di().await;
 
+    assert_eq!(di.is_ok(), true);
+
+    let di = di.unwrap();
+
     let context = di.get_context();
 
     let user_service = get_user_service(&context).await;
+
+    assert_eq!(user_service.is_ok(), true);
+
+    let user_service = user_service.unwrap();
 
     let user_entity = user_service
       .add_user(&AddUserPort {
@@ -111,9 +148,17 @@ mod tests {
   async fn should_remove_new_user() {
     let di = create_di().await;
 
+    assert_eq!(di.is_ok(), true);
+
+    let di = di.unwrap();
+
     let context = di.get_context();
 
     let user_service = get_user_service(&context).await;
+
+    assert_eq!(user_service.is_ok(), true);
+
+    let user_service = user_service.unwrap();
 
     let user_entity = user_service
       .add_user(&AddUserPort {
