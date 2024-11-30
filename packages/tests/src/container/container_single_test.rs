@@ -12,10 +12,10 @@ mod tests {
       .register(AdapterStringTest::token(), || AdapterStringTest::new())
       .await;
 
-    assert_eq!(registered.is_ok(), true);
+    assert!(registered.is_ok());
 
     let svc = container.resolve(AdapterStringTest::token()).await;
 
-    assert_eq!(svc.is_ok(), true);
+    assert!(svc.is_ok());
   }
 }

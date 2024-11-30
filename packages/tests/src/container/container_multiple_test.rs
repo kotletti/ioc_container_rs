@@ -14,19 +14,19 @@ mod tests {
       .register(AdapterStringTest::token(), || AdapterStringTest::new())
       .await;
 
-    assert_eq!(registered.is_ok(), true);
+    assert!(registered.is_ok(), "Failed to register AdapterStringTest");
 
     let registered = container
       .register(AdapterNumberTest::token(), || AdapterNumberTest::new())
       .await;
 
-    assert_eq!(registered.is_ok(), true);
+    assert!(registered.is_ok(), "Failed to register AdapterNumberTest");
 
     let first = container.resolve(AdapterStringTest::token()).await;
 
     let second = container.resolve(AdapterStringTest::token()).await;
 
-    assert_eq!(first.is_ok(), true);
-    assert_eq!(second.is_ok(), true);
+    assert!(first.is_ok());
+    assert!(second.is_ok());
   }
 }

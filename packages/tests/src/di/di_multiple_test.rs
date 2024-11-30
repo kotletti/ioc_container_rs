@@ -22,30 +22,25 @@ mod tests {
         token: AdapterStringTest::token(),
         factory: Arc::new(|_| AdapterStringTest::new()),
       })
-      .await;
-
-    assert_eq!(di.is_ok(), true);
+      .await
+      .expect("Failed to inject AdapterStringTest");
 
     let di = di
-      .unwrap()
       .inject(InjectAdapter {
         token: AdapterNumberTest::token(),
         factory: Arc::new(|_| AdapterNumberTest::new()),
       })
-      .await;
-
-    assert_eq!(di.is_ok(), true);
-
-    let di = di.unwrap();
+      .await
+      .expect("Failed to inject AdapterNumberTest");
 
     let context = di.get_context();
 
     let string_svc = AdapterStringTest::get_adapter(&context).await;
 
-    assert_eq!(string_svc.is_ok(), true);
+    assert!(string_svc.is_ok());
 
     let number_svc = AdapterNumberTest::get_adapter(&context).await;
 
-    assert_eq!(number_svc.is_ok(), true)
+    assert!(number_svc.is_ok())
   }
 }

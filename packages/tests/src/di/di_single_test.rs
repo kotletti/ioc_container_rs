@@ -23,17 +23,14 @@ mod tests {
         token: AdapterStringTest::token(),
         factory: Arc::new(|_| AdapterStringTest::new()),
       })
-      .await;
-
-    assert_eq!(di.is_ok(), true);
-
-    let di = di.unwrap();
+      .await
+      .expect("Failed to inject adapter");
 
     let context = di.get_context();
 
     let svc = AdapterStringTest::get_adapter(&context).await;
 
-    assert_eq!(svc.is_ok(), true);
+    assert!(svc.is_ok());
   }
 
   #[tokio::test]
@@ -45,26 +42,21 @@ mod tests {
         token: AdapterStringTest::token(),
         factory: Arc::new(|_| AdapterStringTest::new()),
       })
-      .await;
-
-    assert_eq!(di.is_ok(), true);
-
-    let di = di.unwrap();
+      .await
+      .expect("Failed to inject adapter");
 
     let context = di.get_context();
 
     const NEW_STRING: &str = "Hello, Rust!";
 
-    let svc = AdapterStringTest::get_adapter(&context).await;
-
-    assert_eq!(svc.is_ok(), true);
-
-    let mut svc = svc.unwrap();
+    let mut svc = AdapterStringTest::get_adapter(&context)
+      .await
+      .expect("Failed to get adapter");
 
     svc.set_message(NEW_STRING.to_string());
 
     let message = svc.get_message();
 
-    assert_eq!(message, NEW_STRING);
+    assert_eq!(message, NEW_STRING, "Message should be equal");
   }
 }

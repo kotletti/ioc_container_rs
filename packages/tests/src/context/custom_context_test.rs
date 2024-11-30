@@ -4,7 +4,6 @@ pub mod tests {
 
   use ioc_container_rs::{
     container::di::{InjectAdapter, DI},
-    errors::error::Error,
     ports::adapter_port::AdapterPort,
   };
 
@@ -12,7 +11,7 @@ pub mod tests {
     adapters::adapter_number_test::AdapterNumberTest, context::custom_context::CustomContext,
   };
 
-  async fn create_di() -> Result<DI, Error> {
+  async fn create_di() -> DI {
     let di = DI::new(Arc::new(CustomContext::new()));
 
     let di = di
@@ -20,48 +19,49 @@ pub mod tests {
         token: AdapterNumberTest::token(),
         factory: Arc::new(|_| AdapterNumberTest::new()),
       })
-      .await?;
+      .await
+      .expect("Failed to inject adapter");
 
-    Ok(di)
+    di
   }
 
   #[tokio::test]
   async fn should_be_valid_di() {
-    let di = create_di().await;
+    create_di().await;
 
-    assert_eq!(di.is_ok(), true);
+    assert!(true, "Should be valid di");
   }
 
   #[tokio::test]
   async fn should_be_able_to_resolve_adapter() {
-    let di = create_di().await.unwrap();
+    let di = create_di().await;
 
     let context = di.get_context();
 
     let adapter = AdapterNumberTest::get_adapter(&context).await;
 
-    assert_eq!(adapter.is_ok(), true);
+    assert!(adapter.is_ok());
   }
 
   #[tokio::test]
   async fn should_be_cast_to_context() {
-    let di = create_di().await.unwrap();
+    let di = create_di().await;
 
     let context = di.get_context();
 
     let context = context.as_any().downcast_ref::<CustomContext>();
 
-    assert_eq!(context.is_some(), true);
+    assert!(context.is_some());
   }
 
   #[tokio::test]
   async fn should_be_empty_metrics() {
-    let di = create_di().await.unwrap();
+    let di = create_di().await;
 
     let context = di.get_context();
     let context = context.as_any().downcast_ref::<CustomContext>();
 
-    assert_eq!(context.is_some(), true);
+    assert!(context.is_some());
 
     let context = context.unwrap();
 
@@ -74,7 +74,7 @@ pub mod tests {
 
   #[tokio::test]
   async fn should_be_able_to_increment_metrics() {
-    let di = create_di().await.unwrap();
+    let di = create_di().await;
 
     let context = di.get_context();
 
@@ -83,7 +83,7 @@ pub mod tests {
 
     let context = context.as_any().downcast_ref::<CustomContext>();
 
-    assert_eq!(context.is_some(), true);
+    assert!(context.is_some());
 
     let context = context.unwrap();
 
@@ -93,7 +93,7 @@ pub mod tests {
 
     let count = metrics.get(&AdapterNumberTest::token().to_string());
 
-    assert_eq!(count.is_some(), true);
+    assert!(count.is_some());
 
     let count = count.unwrap();
 
