@@ -4,15 +4,21 @@ mod tests {
 
   use ioc_container_rs::{
     container::di::{InjectAdapter, DI},
-    context::context::Context,
+    context::container_context::ContainerContext,
     ports::adapter_port::AdapterPort,
   };
 
   use crate::adapters::adapter_string_test::{AdapterStringTest, AdapterStringTestPort};
 
+  fn create_di() -> DI {
+    DI::new(Arc::new(ContainerContext::new()))
+  }
+
   #[tokio::test]
   async fn should_be_build_and_resolve_service() {
-    let di = DI::new()
+    let di = create_di();
+
+    let di = di
       .inject(InjectAdapter {
         token: AdapterStringTest::token(),
         factory: Arc::new(|_| AdapterStringTest::new()),
@@ -25,16 +31,16 @@ mod tests {
 
     let context = di.get_context();
 
-    let svc = context
-      .resolve_provider::<AdapterStringTest>(AdapterStringTest::token())
-      .await;
+    let svc = AdapterStringTest::get_adapter(&context).await;
 
     assert_eq!(svc.is_ok(), true);
   }
 
   #[tokio::test]
   async fn should_be_mutate_string() {
-    let di = DI::new()
+    let di = create_di();
+
+    let di = di
       .inject(InjectAdapter {
         token: AdapterStringTest::token(),
         factory: Arc::new(|_| AdapterStringTest::new()),
@@ -49,9 +55,7 @@ mod tests {
 
     const NEW_STRING: &str = "Hello, Rust!";
 
-    let svc = context
-      .resolve_provider::<AdapterStringTest>(AdapterStringTest::token())
-      .await;
+    let svc = AdapterStringTest::get_adapter(&context).await;
 
     assert_eq!(svc.is_ok(), true);
 

@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::{context::container_context::ContainerContext, errors::error::Error};
+use crate::errors::error::Error;
+
+use super::context_port::ContextPort;
 
 #[async_trait]
 pub trait AdapterPort<T>: Send + Sync + 'static {
@@ -10,5 +12,5 @@ pub trait AdapterPort<T>: Send + Sync + 'static {
   where
     Self: Sized;
 
-  async fn get_adapter(context: &Arc<ContainerContext>) -> Result<Box<Self>, Error>;
+  async fn get_adapter(context: &Arc<dyn ContextPort>) -> Result<Box<Self>, Error>;
 }

@@ -14,9 +14,7 @@ mod tests {
 
     assert_eq!(registered.is_ok(), true);
 
-    let svc = container
-      .resolve::<AdapterStringTest>(AdapterStringTest::token())
-      .await;
+    let svc = container.resolve(AdapterStringTest::token()).await;
 
     assert_eq!(svc.is_ok(), true);
   }

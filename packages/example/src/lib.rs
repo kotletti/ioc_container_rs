@@ -6,7 +6,7 @@ use adapters::{
 use entities::user_entity::UserEntity;
 use ioc_container_rs::{
   container::di::{InjectAdapter, DI},
-  context::{container_context::ContainerContext, context::Context},
+  context::container_context::ContainerContext,
   errors::error::Error,
   ports::adapter_port::AdapterPort,
 };
@@ -17,6 +17,8 @@ pub mod entities;
 pub mod ports;
 
 pub async fn create_di() -> Result<DI, Error> {
+  let di = DI::new(Arc::new(ContainerContext::new()));
+
   let store: Arc<RwLock<Vec<UserEntity>>> = Arc::new(RwLock::new(vec![]));
 
   let user_repository_injector = InjectAdapter {
@@ -24,7 +26,7 @@ pub async fn create_di() -> Result<DI, Error> {
     factory: Arc::new(move |_| UserRepositoryAdapter::new(store.clone())),
   };
 
-  let di = DI::new()
+  let di = di
     .inject(user_repository_injector)
     .await?
     .inject(InjectAdapter {
@@ -36,27 +38,16 @@ pub async fn create_di() -> Result<DI, Error> {
   di
 }
 
-pub async fn get_user_service(
-  context: &Arc<ContainerContext>,
-) -> Result<Box<UserServiceAdapter>, Error> {
-  context
-    .resolve_provider::<UserServiceAdapter>(UserServiceAdapter::token())
-    .await
-}
-
-pub async fn get_user_repository(
-  context: &Arc<ContainerContext>,
-) -> Result<Box<UserRepositoryAdapter>, Error> {
-  context
-    .resolve_provider::<UserRepositoryAdapter>(UserRepositoryAdapter::token())
-    .await
-}
-
 #[cfg(test)]
 mod tests {
 
+  use ioc_container_rs::ports::adapter_port::AdapterPort;
+
   use crate::{
-    create_di, get_user_repository, get_user_service,
+    adapters::{
+      user_repository_adapter::UserRepositoryAdapter, user_service_adapter::UserServiceAdapter,
+    },
+    create_di,
     ports::{
       input::{
         add_user_port::AddUserPort, delete_user_port::DeleteUserPort, get_user_port::GetUserPort,
@@ -75,7 +66,7 @@ mod tests {
 
     let context = di.get_context();
 
-    let user_repository = get_user_repository(&context).await;
+    let user_repository = UserRepositoryAdapter::get_adapter(&context).await;
 
     assert_eq!(user_repository.is_ok(), true);
 
@@ -100,7 +91,7 @@ mod tests {
 
     let context = di.get_context();
 
-    let user_service = get_user_service(&context).await;
+    let user_service = UserServiceAdapter::get_adapter(&context).await;
 
     assert_eq!(user_service.is_ok(), true);
 
@@ -125,7 +116,7 @@ mod tests {
 
     let context = di.get_context();
 
-    let user_service = get_user_service(&context).await;
+    let user_service = UserServiceAdapter::get_adapter(&context).await;
 
     assert_eq!(user_service.is_ok(), true);
 
@@ -136,10 +127,17 @@ mod tests {
         name: "Andrey".to_string(),
         email: "andrey@mail.ru".to_string(),
       })
-      .await
-      .unwrap();
+      .await;
 
-    let count = user_service.get_count().await.unwrap();
+    assert_eq!(user_entity.is_ok(), true);
+
+    let user_entity = user_entity.unwrap();
+
+    let count = user_service.get_count().await;
+
+    assert_eq!(count.is_ok(), true);
+
+    let count = count.unwrap();
 
     assert_eq!(count, 1);
     assert_eq!(user_entity.name, "Andrey");
@@ -155,7 +153,7 @@ mod tests {
 
     let context = di.get_context();
 
-    let user_service = get_user_service(&context).await;
+    let user_service = UserServiceAdapter::get_adapter(&context).await;
 
     assert_eq!(user_service.is_ok(), true);
 
@@ -166,8 +164,11 @@ mod tests {
         name: "Andrey".to_string(),
         email: "andrey@mail.ru".to_string(),
       })
-      .await
-      .unwrap();
+      .await;
+
+    assert_eq!(user_entity.is_ok(), true);
+
+    let user_entity = user_entity.unwrap();
 
     let user_deletion = user_service
       .delete_user(&DeleteUserPort {
@@ -181,8 +182,11 @@ mod tests {
       .get_user(&GetUserPort {
         email: user_entity.email.to_string(),
       })
-      .await
-      .unwrap();
+      .await;
+
+    assert_eq!(check_user_entity.is_ok(), true);
+
+    let check_user_entity = check_user_entity.unwrap();
 
     assert_eq!(check_user_entity.is_none(), true);
   }

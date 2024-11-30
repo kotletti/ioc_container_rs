@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use ioc_container_rs::{
-  context::{container_context::ContainerContext, context::Context},
   errors::error::Error,
-  ports::adapter_port::AdapterPort,
+  ports::{adapter_port::AdapterPort, context_port::ContextPort},
 };
 
 use super::{
@@ -21,11 +20,11 @@ pub trait AdapterAbstractNestedTestPort: Send + Sync {
 }
 
 pub struct AdapterAbstractNestedTest {
-  context: Arc<ContainerContext>,
+  context: Arc<dyn ContextPort>,
 }
 
 impl AdapterAbstractNestedTest {
-  pub fn new(context: Arc<ContainerContext>) -> Self {
+  pub fn new(context: Arc<dyn ContextPort>) -> Self {
     Self { context }
   }
 }
@@ -36,8 +35,12 @@ impl AdapterPort<AdapterAbstractNestedTest> for AdapterAbstractNestedTest {
     "ADAPTER_ABSTRACT_NESTED_TEST"
   }
 
-  async fn get_adapter(context: &Arc<ContainerContext>) -> Result<Box<Self>, Error> {
-    let me = context.resolve_provider::<Self>(Self::token()).await?;
+  async fn get_adapter(context: &Arc<dyn ContextPort>) -> Result<Box<Self>, Error> {
+    let me = context
+      .resolve_provider(Self::token())
+      .await?
+      .downcast::<Self>()
+      .map_err(|_| format!("Cant resolve provider: {}", Self::token()))?;
 
     Ok(me)
   }
@@ -62,23 +65,17 @@ impl AdapterAbstractNestedTestPort for AdapterAbstractNestedTest {
   }
 
   async fn get_string(&self) -> Result<String, Error> {
-    let provider = self
-      .context
-      .resolve_provider::<AdapterStringTest>(AdapterStringTest::token())
-      .await?;
+    let svc = AdapterStringTest::get_adapter(&self.context).await?;
 
-    let message = provider.get_message();
+    let message = svc.get_message();
 
     Ok(message.to_string())
   }
 
   async fn get_number(&self) -> Result<i32, Error> {
-    let provider = self
-      .context
-      .resolve_provider::<AdapterNumberTest>(AdapterNumberTest::token())
-      .await?;
+    let svc = AdapterNumberTest::get_adapter(&self.context).await?;
 
-    let number = provider.get_number();
+    let number = svc.get_number();
 
     Ok(number)
   }

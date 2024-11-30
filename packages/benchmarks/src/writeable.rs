@@ -7,8 +7,8 @@ use std::{
 
 use common::create_di::create_di;
 use ioc_container_rs::{
-  context::container_context::ContainerContext, errors::error::Error,
-  ports::adapter_port::AdapterPort,
+  errors::error::Error,
+  ports::{adapter_port::AdapterPort, context_port::ContextPort},
 };
 use tests::adapters::adapter_nested_test::{AdapterNested, AdapterNestedPort};
 use tokio::task::JoinHandle;
@@ -37,7 +37,7 @@ fn generate_random_string(len: usize) -> String {
   result
 }
 
-async fn write_data(context: &Arc<ContainerContext>) -> Result<(), Error> {
+async fn write_data(context: &Arc<dyn ContextPort>) -> Result<(), Error> {
   let svc = AdapterNested::get_adapter(context).await?;
 
   svc.set_string(&generate_random_string(10)).await?;

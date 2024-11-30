@@ -22,13 +22,9 @@ mod tests {
 
     assert_eq!(registered.is_ok(), true);
 
-    let first = container
-      .resolve::<AdapterStringTest>(AdapterStringTest::token())
-      .await;
+    let first = container.resolve(AdapterStringTest::token()).await;
 
-    let second = container
-      .resolve::<AdapterStringTest>(AdapterStringTest::token())
-      .await;
+    let second = container.resolve(AdapterStringTest::token()).await;
 
     assert_eq!(first.is_ok(), true);
     assert_eq!(second.is_ok(), true);

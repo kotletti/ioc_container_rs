@@ -41,7 +41,7 @@ impl Container {
     Ok(())
   }
 
-  pub async fn resolve<T: 'static>(&self, token: &'static str) -> Result<Box<T>, Error> {
+  pub async fn resolve(&self, token: &'static str) -> Result<Box<dyn Any>, Error> {
     let has_token = self.has_token(token).await;
 
     if !has_token {
@@ -54,11 +54,7 @@ impl Container {
       .get(token)
       .ok_or_else(|| format!("Provider by token {} does not exist", token))?;
 
-    let provider = provider()
-      .downcast::<T>()
-      .map_err(|_| format!("Failed to cast token {} to expected type", token))?;
-
-    Ok(provider)
+    Ok(provider())
   }
 
   pub async fn registered_tokens(&self) -> Vec<String> {

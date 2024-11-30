@@ -2,8 +2,8 @@ use std::{sync::Arc, time::Instant};
 
 use common::create_di::create_di;
 use ioc_container_rs::{
-  context::container_context::ContainerContext, errors::error::Error,
-  ports::adapter_port::AdapterPort,
+  errors::error::Error,
+  ports::{adapter_port::AdapterPort, context_port::ContextPort},
 };
 use tests::adapters::adapter_nested_test::{AdapterNested, AdapterNestedPort};
 use tokio::task::JoinHandle;
@@ -12,7 +12,7 @@ use crate::common::constants::{ITERATIONS, THREADS};
 
 mod common;
 
-async fn read_data(context: &Arc<ContainerContext>) -> Result<(), Error> {
+async fn read_data(context: &Arc<dyn ContextPort>) -> Result<(), Error> {
   let svc = AdapterNested::get_adapter(context).await?;
 
   svc.get_string().await?;

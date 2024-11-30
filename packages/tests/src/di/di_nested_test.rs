@@ -3,6 +3,7 @@ mod tests {
   use std::sync::Arc;
 
   use ioc_container_rs::container::di::{InjectAdapter, DI};
+  use ioc_container_rs::context::container_context::ContainerContext;
   use ioc_container_rs::errors::error::Error;
   use ioc_container_rs::ports::adapter_port::AdapterPort;
 
@@ -14,7 +15,7 @@ mod tests {
   const DEFAULT_NUMBER: i32 = 0;
 
   async fn create_di() -> Result<DI, Error> {
-    DI::new()
+    DI::new(Arc::new(ContainerContext::new()))
       .inject(InjectAdapter {
         token: AdapterStringTest::token(),
         factory: Arc::new(|_| AdapterStringTest::new()),

@@ -1,25 +1,22 @@
 use std::sync::Arc;
 
 use crate::{
-  context::{container_context::ContainerContext, context::Context},
   errors::error::Error,
-  ports::adapter_port::AdapterPort,
+  ports::{adapter_port::AdapterPort, context_port::ContextPort},
 };
 
 pub struct InjectAdapter<T> {
   pub token: &'static str,
-  pub factory: Arc<dyn Fn(Arc<ContainerContext>) -> T + Send + Sync + 'static>,
+  pub factory: Arc<dyn Fn(Arc<dyn ContextPort>) -> T + Send + Sync + 'static>,
 }
 
 #[derive(Clone)]
 pub struct DI {
-  context: Arc<ContainerContext>,
+  context: Arc<dyn ContextPort>,
 }
 
 impl DI {
-  pub fn new() -> Self {
-    let context = Arc::new(ContainerContext::new());
-
+  pub fn new(context: Arc<dyn ContextPort>) -> Self {
     Self { context }
   }
 
@@ -35,7 +32,7 @@ impl DI {
     Ok(self.clone())
   }
 
-  pub fn get_context(&self) -> Arc<ContainerContext> {
+  pub fn get_context(&self) -> Arc<dyn ContextPort> {
     self.context.clone()
   }
 }

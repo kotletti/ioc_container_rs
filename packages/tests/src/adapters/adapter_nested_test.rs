@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use ioc_container_rs::{
-  context::{container_context::ContainerContext, context::Context},
   errors::error::Error,
-  ports::adapter_port::AdapterPort,
+  ports::{adapter_port::AdapterPort, context_port::ContextPort},
 };
 
 use super::{
@@ -21,11 +20,11 @@ pub trait AdapterNestedPort: Sync + Send + 'static {
 }
 
 pub struct AdapterNested {
-  context: Arc<ContainerContext>,
+  context: Arc<dyn ContextPort>,
 }
 
 impl AdapterNested {
-  pub fn new(context: Arc<ContainerContext>) -> Self {
+  pub fn new(context: Arc<dyn ContextPort>) -> Self {
     Self { context }
   }
 }
@@ -36,8 +35,12 @@ impl AdapterPort<AdapterNested> for AdapterNested {
     "ADAPTER_NESTED_TEST"
   }
 
-  async fn get_adapter(context: &Arc<ContainerContext>) -> Result<Box<Self>, Error> {
-    let me = context.resolve_provider::<Self>(Self::token()).await?;
+  async fn get_adapter(context: &Arc<dyn ContextPort>) -> Result<Box<Self>, Error> {
+    let me = context
+      .resolve_provider(Self::token())
+      .await?
+      .downcast::<Self>()
+      .map_err(|_| format!("Cant resolve provider: {}", Self::token()))?;
 
     Ok(me)
   }
