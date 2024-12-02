@@ -1,5 +1,13 @@
 # Changelog
 
+## Version 0.2.0 BREAKING CHANGES
+* Add strict trait `AdapterPort<T>` to factory of `InjectAdapter<T>`
+* `Context` trait to `ContextPort`
+* Wrap to `Result` most methods of context for safety without panics
+* Remove `ContainerStore` layer
+* Add implementation of custom `Context` with side effects
+* Add tests for `CustomContext`
+
 ## Version 0.1.0 BREAKING CHANGES
 * Replace the `std::sync::Mutex` to `tokio::sync::RwLock`
 * Modify examples

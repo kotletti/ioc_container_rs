@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-  use ioc_container_rs::container::container::Container;
+  use ioc_container_rs::{container::container::Container, ports::adapter_port::AdapterPort};
 
   use crate::adapters::{
     adapter_number_test::AdapterNumberTest, adapter_string_test::AdapterStringTest,
@@ -10,23 +10,23 @@ mod tests {
   async fn should_be_able_to_register_and_resolve_multiple() {
     let container = Container::new();
 
-    container
+    let registered = container
       .register(AdapterStringTest::token(), || AdapterStringTest::new())
       .await;
 
-    container
+    assert!(registered.is_ok(), "Failed to register AdapterStringTest");
+
+    let registered = container
       .register(AdapterNumberTest::token(), || AdapterNumberTest::new())
       .await;
 
-    let first = container
-      .resolve::<AdapterStringTest>(AdapterStringTest::token())
-      .await;
+    assert!(registered.is_ok(), "Failed to register AdapterNumberTest");
 
-    let second = container
-      .resolve::<AdapterStringTest>(AdapterStringTest::token())
-      .await;
+    let first = container.resolve(AdapterStringTest::token()).await;
 
-    assert_eq!(first.is_some(), true);
-    assert_eq!(second.is_some(), true);
+    let second = container.resolve(AdapterStringTest::token()).await;
+
+    assert!(first.is_ok());
+    assert!(second.is_ok());
   }
 }

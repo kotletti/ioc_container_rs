@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use ioc_container_rs::errors::error::Error;
 
 use crate::{
   entities::user_entity::UserEntity,
@@ -9,8 +10,8 @@ use crate::{
 
 #[async_trait]
 pub trait UserServicePort {
-  async fn add_user(&self, payload: &AddUserPort) -> Result<UserEntity, String>;
-  async fn delete_user(&self, payload: &DeleteUserPort) -> Result<(), String>;
-  async fn get_user(&self, payload: &GetUserPort) -> Result<Option<UserEntity>, String>;
-  async fn get_count(&self) -> Result<usize, String>;
+  async fn add_user(&self, payload: &AddUserPort) -> Result<UserEntity, Error>;
+  async fn delete_user(&self, payload: &DeleteUserPort) -> Result<(), Error>;
+  async fn get_user(&self, payload: &GetUserPort) -> Result<Option<UserEntity>, Error>;
+  async fn get_count(&self) -> Result<usize, Error>;
 }

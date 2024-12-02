@@ -3,9 +3,10 @@ mod tests {
   use std::sync::Arc;
 
   use ioc_container_rs::container::di::{InjectAdapter, DI};
-  use ioc_container_rs::context::context::Context;
+  use ioc_container_rs::context::container_context::ContainerContext;
+  use ioc_container_rs::ports::adapter_port::AdapterPort;
 
-  use crate::adapters::adapter_nested_test::AdapterNested;
+  use crate::adapters::adapter_nested_test::{AdapterNested, AdapterNestedPort};
   use crate::adapters::adapter_number_test::AdapterNumberTest;
   use crate::adapters::adapter_string_test::AdapterStringTest;
 
@@ -13,22 +14,31 @@ mod tests {
   const DEFAULT_NUMBER: i32 = 0;
 
   async fn create_di() -> DI {
-    DI::new()
+    let di = DI::new(Arc::new(ContainerContext::new()))
       .inject(InjectAdapter {
         token: AdapterStringTest::token(),
         factory: Arc::new(|_| AdapterStringTest::new()),
       })
       .await
+      .expect("Failed to inject AdapterStringTest");
+
+    let di = di
       .inject(InjectAdapter {
         token: AdapterNumberTest::token(),
         factory: Arc::new(|_| AdapterNumberTest::new()),
       })
       .await
+      .expect("Failed to inject AdapterNumberTest");
+
+    let di = di
       .inject(InjectAdapter {
         token: AdapterNested::token(),
-        factory: Arc::new(AdapterNested::new),
+        factory: Arc::new(|context| AdapterNested::new(context)),
       })
       .await
+      .expect("Failed to inject AdapterNested");
+
+    di
   }
 
   #[tokio::test]
@@ -37,11 +47,9 @@ mod tests {
 
     let context = di.get_context();
 
-    context
-      .resolve_provider::<AdapterNested>(AdapterNested::token())
-      .await;
+    let svc = AdapterNested::get_adapter(&context).await;
 
-    assert!(true);
+    assert!(svc.is_ok());
   }
 
   #[tokio::test]
@@ -50,14 +58,24 @@ mod tests {
 
     let context = di.get_context();
 
-    let svc = context
-      .resolve_provider::<AdapterNested>(AdapterNested::token())
-      .await;
+    let svc = AdapterNested::get_adapter(&context)
+      .await
+      .expect("Failed to get AdapterNested");
 
-    let number = svc.get_number().await;
-    let string = svc.get_string().await;
+    let number = svc.get_number().await.expect("Failed to get number");
+    let string = svc.get_string().await.expect("Failed to get string");
 
-    assert_eq!(number, DEFAULT_NUMBER);
-    assert_eq!(string, DEFAULT_STRING);
+    assert_eq!(
+      number,
+      DEFAULT_NUMBER,
+      "{}",
+      format!("Number should be {}", DEFAULT_NUMBER)
+    );
+    assert_eq!(
+      string,
+      DEFAULT_STRING,
+      "{}",
+      format!("String should be {}", DEFAULT_STRING)
+    );
   }
 }

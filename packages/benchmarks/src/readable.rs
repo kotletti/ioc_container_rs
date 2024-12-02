@@ -1,20 +1,23 @@
 use std::{sync::Arc, time::Instant};
 
 use common::create_di::create_di;
-use ioc_container_rs::context::{container_context::ContainerContext, context::Context};
-use tests::adapters::adapter_nested_test::AdapterNested;
+use ioc_container_rs::{
+  errors::error::Error,
+  ports::{adapter_port::AdapterPort, context_port::ContextPort},
+};
+use tests::adapters::adapter_nested_test::{AdapterNested, AdapterNestedPort};
 use tokio::task::JoinHandle;
 
 use crate::common::constants::{ITERATIONS, THREADS};
 
 mod common;
 
-async fn read_data(context: &Arc<ContainerContext>) {
-  let svc = context
-    .resolve_provider::<AdapterNested>(AdapterNested::token())
-    .await;
+async fn read_data(context: &Arc<dyn ContextPort>) -> Result<(), Error> {
+  let svc = AdapterNested::get_adapter(context).await?;
 
-  svc.get_string().await;
+  svc.get_string().await?;
+
+  Ok(())
 }
 
 async fn bench() -> Vec<JoinHandle<()>> {
@@ -24,7 +27,16 @@ async fn bench() -> Vec<JoinHandle<()>> {
     let handle = tokio::spawn(async {
       let context = create_di().await;
 
-      read_data(&context).await;
+      if context.is_err() {
+        eprintln!("Error: {:?}", &context.err());
+        return;
+      }
+
+      let r = read_data(&context.unwrap()).await;
+
+      if r.is_err() {
+        eprintln!("Error: {:?}", &r.err());
+      }
     });
 
     handlers.push(handle);

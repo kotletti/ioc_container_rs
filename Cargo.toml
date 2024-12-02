@@ -1,8 +1,8 @@
 [workspace]
-
+resolver = "2"
 members = [
-  "packages/ioc_container_rs",
-  "packages/example",
-  "packages/tests",
-  "packages/benchmarks",
+    "packages/ioc_container_rs",
+    "packages/example",
+    "packages/tests",
+    "packages/benchmarks",
 ]
