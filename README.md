@@ -144,19 +144,19 @@ machdep.cpu.brand_string: Apple M1 Max
 Initialization of DI
 Threads per iteration: 10
 Iterations: 10000
-Duration: 149.909333ms
+Duration: 170.909333ms
 ```
 
 ```
 Read the data from DI
 Threads per iteration: 10
 Iterations: 10000
-Duration: 175.854958ms
+Duration: 221.854958ms
 ```
 
 ```
 Write the data from DI
 Threads per iteration: 10
 Iterations: 10000
-Duration: 204.2085ms
+Duration: 253.2085ms
 ```

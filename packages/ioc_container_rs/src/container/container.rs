@@ -11,57 +11,57 @@ pub type FactoryItem = Box<dyn Fn() -> AsyncAny + Send + Sync + 'static>;
 type Store = Arc<RwLock<HashMap<String, FactoryItem>>>;
 
 pub struct Container {
-  store: Store,
+    store: Store,
 }
 
 impl Container {
-  pub fn new() -> Self {
-    let store = Arc::new(RwLock::new(HashMap::new()));
+    pub fn new() -> Self {
+        let store = Arc::new(RwLock::new(HashMap::new()));
 
-    Self { store }
-  }
-
-  pub async fn register<T, F>(&self, token: &'static str, factory: F) -> Result<(), Error>
-  where
-    T: Send + Sync + 'static,
-    F: Fn() -> T + Send + Sync + 'static,
-  {
-    let has_token = self.has_token(token).await;
-
-    if has_token {
-      return Err(format!("Token {} already exists", token).into());
+        Self { store }
     }
 
-    let mut store = self.store.write().await;
+    pub async fn register<T, F>(&self, token: &'static str, factory: F) -> Result<(), Error>
+    where
+        T: Send + Sync + 'static,
+        F: Fn() -> T + Send + Sync + 'static,
+    {
+        let has_token = self.has_token(token).await;
 
-    let factory_wrapped: FactoryItem = Box::new(move || Box::new(factory()));
+        if has_token {
+            return Err(format!("Token {} already exists", token).into());
+        }
 
-    store.insert(token.to_string(), factory_wrapped);
+        let mut store = self.store.write().await;
 
-    Ok(())
-  }
+        let factory_wrapped: FactoryItem = Box::new(move || Box::new(factory()));
 
-  pub async fn resolve(&self, token: &'static str) -> Result<Box<dyn Any>, Error> {
-    let has_token = self.has_token(token).await;
+        store.insert(token.to_string(), factory_wrapped);
 
-    if !has_token {
-      return Err(format!("Token {} does not exist", token).into());
+        Ok(())
     }
 
-    let store = self.store.read().await;
+    pub async fn resolve(&self, token: &'static str) -> Result<Box<dyn Any>, Error> {
+        let has_token = self.has_token(token).await;
 
-    let provider = store
-      .get(token)
-      .ok_or_else(|| format!("Provider by token {} does not exist", token))?;
+        if !has_token {
+            return Err(format!("Token {} does not exist", token).into());
+        }
 
-    Ok(provider())
-  }
+        let store = self.store.read().await;
 
-  pub async fn registered_tokens(&self) -> Vec<String> {
-    self.store.read().await.keys().cloned().collect()
-  }
+        let provider = store
+            .get(token)
+            .ok_or_else(|| format!("Provider by token {} does not exist", token))?;
 
-  pub async fn has_token(&self, token: &'static str) -> bool {
-    self.store.read().await.contains_key(token)
-  }
+        Ok(provider())
+    }
+
+    pub async fn registered_tokens(&self) -> Vec<String> {
+        self.store.read().await.keys().cloned().collect()
+    }
+
+    pub async fn has_token(&self, token: &'static str) -> bool {
+        self.store.read().await.contains_key(token)
+    }
 }

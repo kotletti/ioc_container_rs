@@ -1,4 +1,4 @@
 pub struct AddUserPort {
-  pub name: String,
-  pub email: String,
+    pub name: String,
+    pub email: String,
 }

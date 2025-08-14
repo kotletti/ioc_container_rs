@@ -1,3 +1,3 @@
 pub struct DeleteUserPort {
-  pub email: String,
+    pub email: String,
 }
