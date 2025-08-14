@@ -1,3 +1,3 @@
 pub struct GetUserPort {
-  pub email: String,
+    pub email: String,
 }

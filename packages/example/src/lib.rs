@@ -5,148 +5,152 @@ pub mod ports;
 #[cfg(test)]
 mod tests {
 
-  use std::sync::Arc;
+    use std::sync::Arc;
 
-  use ioc_container_rs::{
-    container::di::{InjectAdapter, DI},
-    context::container_context::ContainerContext,
-    ports::adapter_port::AdapterPort,
-  };
-  use tokio::sync::RwLock;
+    use ioc_container_rs::{
+        container::di::{InjectAdapter, DI},
+        context::container_context::ContainerContext,
+        ports::adapter_port::AdapterPort,
+    };
+    use tokio::sync::RwLock;
 
-  use crate::{
-    adapters::{
-      user_repository_adapter::UserRepositoryAdapter, user_service_adapter::UserServiceAdapter,
-    },
-    entities::user_entity::UserEntity,
-    ports::{
-      input::{
-        add_user_port::AddUserPort, delete_user_port::DeleteUserPort, get_user_port::GetUserPort,
-      },
-      output::{user_repository_port::UserRepositoryPort, user_service_port::UserServicePort},
-    },
-  };
-
-  async fn create_di() -> DI {
-    let di = DI::new(Arc::new(ContainerContext::new()));
-
-    let store: Arc<RwLock<Vec<UserEntity>>> = Arc::new(RwLock::new(vec![]));
-
-    let user_repository_injector = InjectAdapter {
-      token: UserRepositoryAdapter::token(),
-      factory: Arc::new(move |_| UserRepositoryAdapter::new(store.clone())),
+    use crate::{
+        adapters::{
+            user_repository_adapter::UserRepositoryAdapter,
+            user_service_adapter::UserServiceAdapter,
+        },
+        entities::user_entity::UserEntity,
+        ports::{
+            input::{
+                add_user_port::AddUserPort, delete_user_port::DeleteUserPort,
+                get_user_port::GetUserPort,
+            },
+            output::{
+                user_repository_port::UserRepositoryPort, user_service_port::UserServicePort,
+            },
+        },
     };
 
-    let di = di
-      .inject(user_repository_injector)
-      .await
-      .expect("UserRepositoryAdapter should be injected");
+    async fn create_di() -> DI {
+        let di = DI::new(Arc::new(ContainerContext::new()));
 
-    let di = di
-      .inject(InjectAdapter {
-        token: UserServiceAdapter::token(),
-        factory: Arc::new(UserServiceAdapter::new),
-      })
-      .await
-      .expect("UserServiceAdapter should be injected");
+        let store: Arc<RwLock<Vec<UserEntity>>> = Arc::new(RwLock::new(vec![]));
 
-    di
-  }
+        let user_repository_injector = InjectAdapter {
+            token: UserRepositoryAdapter::token(),
+            factory: Arc::new(move |_| UserRepositoryAdapter::new(store.clone())),
+        };
 
-  #[tokio::test]
-  async fn should_be_return_zero_count_from_repository() {
-    let di = create_di().await;
+        let di = di
+            .inject(user_repository_injector)
+            .await
+            .expect("UserRepositoryAdapter should be injected");
 
-    let context = di.get_context();
+        let di = di
+            .inject(InjectAdapter {
+                token: UserServiceAdapter::token(),
+                factory: Arc::new(UserServiceAdapter::new),
+            })
+            .await
+            .expect("UserServiceAdapter should be injected");
 
-    let user_repository = UserRepositoryAdapter::get_adapter(&context).await;
+        di
+    }
 
-    assert!(user_repository.is_ok());
+    #[tokio::test]
+    async fn should_be_return_zero_count_from_repository() {
+        let di = create_di().await;
 
-    let user_repository = user_repository.expect("UserRepository should exist");
+        let context = di.get_context();
 
-    let count = user_repository
-      .get_count()
-      .await
-      .expect("Get count has error");
+        let user_repository = UserRepositoryAdapter::get_adapter(&context).await;
 
-    assert_eq!(count, 0, "Count should be 0");
-  }
+        assert!(user_repository.is_ok());
 
-  #[tokio::test]
-  async fn should_be_return_zero_count_from_service() {
-    let di = create_di().await;
+        let user_repository = user_repository.expect("UserRepository should exist");
 
-    let context = di.get_context();
+        let count = user_repository
+            .get_count()
+            .await
+            .expect("Get count has error");
 
-    let user_service = UserServiceAdapter::get_adapter(&context)
-      .await
-      .expect("UserService should exist");
+        assert_eq!(count, 0, "Count should be 0");
+    }
 
-    let count = user_service.get_count().await.expect("Get count has error");
+    #[tokio::test]
+    async fn should_be_return_zero_count_from_service() {
+        let di = create_di().await;
 
-    assert_eq!(count, 0, "Count should be 0");
-  }
+        let context = di.get_context();
 
-  #[tokio::test]
-  async fn should_return_new_user() {
-    let di = create_di().await;
+        let user_service = UserServiceAdapter::get_adapter(&context)
+            .await
+            .expect("UserService should exist");
 
-    let context = di.get_context();
+        let count = user_service.get_count().await.expect("Get count has error");
 
-    let user_service = UserServiceAdapter::get_adapter(&context)
-      .await
-      .expect("UserService should exist");
+        assert_eq!(count, 0, "Count should be 0");
+    }
 
-    let user_entity = user_service
-      .add_user(&AddUserPort {
-        name: "Andrey".to_string(),
-        email: "andrey@mail.ru".to_string(),
-      })
-      .await
-      .expect("Add user has error");
+    #[tokio::test]
+    async fn should_return_new_user() {
+        let di = create_di().await;
 
-    let count = user_service.get_count().await.expect("Get count has error");
+        let context = di.get_context();
 
-    assert_eq!(count, 1, "Count should be 1");
-    assert_eq!(user_entity.name, "Andrey", "Name should be Andrey");
-  }
+        let user_service = UserServiceAdapter::get_adapter(&context)
+            .await
+            .expect("UserService should exist");
 
-  #[tokio::test]
-  async fn should_remove_new_user() {
-    let di = create_di().await;
+        let user_entity = user_service
+            .add_user(&AddUserPort {
+                name: "Andrey".to_string(),
+                email: "andrey@mail.ru".to_string(),
+            })
+            .await
+            .expect("Add user has error");
 
-    let context = di.get_context();
+        let count = user_service.get_count().await.expect("Get count has error");
 
-    let user_service = UserServiceAdapter::get_adapter(&context)
-      .await
-      .expect("UserService should exist");
+        assert_eq!(count, 1, "Count should be 1");
+        assert_eq!(user_entity.name, "Andrey", "Name should be Andrey");
+    }
 
-    let user_entity = user_service
-      .add_user(&AddUserPort {
-        name: "Andrey".to_string(),
-        email: "andrey@mail.ru".to_string(),
-      })
-      .await
-      .expect("Add user has error");
+    #[tokio::test]
+    async fn should_remove_new_user() {
+        let di = create_di().await;
 
-    user_service
-      .delete_user(&DeleteUserPort {
-        email: user_entity.email.to_string(),
-      })
-      .await
-      .expect("Delete user has error");
+        let context = di.get_context();
 
-    let check_user_entity = user_service
-      .get_user(&GetUserPort {
-        email: user_entity.email.to_string(),
-      })
-      .await
-      .expect("Get user has error");
+        let user_service = UserServiceAdapter::get_adapter(&context)
+            .await
+            .expect("UserService should exist");
 
-    assert!(
-      check_user_entity.is_none(),
-      "User after deletion should be None"
-    );
-  }
+        let user_entity = user_service
+            .add_user(&AddUserPort {
+                name: "Andrey".to_string(),
+                email: "andrey@mail.ru".to_string(),
+            })
+            .await
+            .expect("Add user has error");
+
+        user_service
+            .delete_user(&DeleteUserPort {
+                email: user_entity.email.to_string(),
+            })
+            .await
+            .expect("Delete user has error");
+
+        let check_user_entity = user_service
+            .get_user(&GetUserPort {
+                email: user_entity.email.to_string(),
+            })
+            .await
+            .expect("Get user has error");
+
+        assert!(
+            check_user_entity.is_none(),
+            "User after deletion should be None"
+        );
+    }
 }

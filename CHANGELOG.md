@@ -1,5 +1,10 @@
 # Changelog
 
+## Version 0.2.1
+* Move `async fn get_adapter(...)` to `AdapterPort<T>`
+* Change tab size `2` -> `4`
+* Update `tokio` & `async-trait` deps
+
 ## Version 0.2.0 BREAKING CHANGES
 * Add strict trait `AdapterPort<T>` to factory of `InjectAdapter<T>`
 * `Context` trait to `ContextPort`

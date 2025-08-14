@@ -1,5 +1,5 @@
 #[derive(Clone)]
 pub struct UserEntity {
-  pub name: String,
-  pub email: String,
+    pub name: String,
+    pub email: String,
 }
