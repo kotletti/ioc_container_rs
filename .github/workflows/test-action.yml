@@ -5,7 +5,7 @@ on:
 jobs:
   Explore-GitHub-Actions:
     # You need to use the INSTALLATION_NAME from the previous step
-    runs-on: ioc_container_rs-runner
+    runs-on: ioc-container-rs-runner
     container: debian:stable-slim
     steps:
     - run: echo "🎉 This job uses runner scale set runners!"
