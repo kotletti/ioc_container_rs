@@ -5,7 +5,7 @@ on:
 jobs:
   Explore-GitHub-Actions:
     # You need to use the INSTALLATION_NAME from the previous step
-    runs-on: arc-runner-set
+    runs-on: kti-runner-0
     container: debian:stable-slim
     steps:
     - run: echo "🎉 This job uses runner scale set runners!"
