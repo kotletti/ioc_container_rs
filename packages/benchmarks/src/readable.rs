@@ -93,16 +93,21 @@ fn main() {
     });
 
     println!(
-        "{}",
-        format!(
-            "Read the data from DI\nThreads: {}\nIterations per thread: {}\nRounds: {}\nFailures: {}\nDuration without DI: {:?}\nDuration with DI: {:?}\nOverhead: {:?}\n====================\n",
-            THREADS,
-            ITERATIONS,
-            ROUNDS,
-            without_di_failures + with_di_failures,
-            without_di,
-            with_di,
-            with_di.saturating_sub(without_di)
-        )
+        "Read the data from DI\n\
+         Threads: {}\n\
+         Iterations per thread: {}\n\
+         Rounds: {}\n\
+         Failures: {}\n\
+         Duration without DI: {:?}\n\
+         Duration with DI: {:?}\n\
+         Overhead: {:?}\n\
+         ====================\n",
+        THREADS,
+        ITERATIONS,
+        ROUNDS,
+        without_di_failures + with_di_failures,
+        without_di,
+        with_di,
+        with_di.saturating_sub(without_di)
     );
 }
