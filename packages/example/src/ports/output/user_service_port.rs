@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[async_trait]
-pub trait UserServicePort {
+pub trait UserServicePort: Send + Sync {
     async fn add_user(&self, payload: &AddUserPort) -> Result<UserEntity, Error>;
     async fn delete_user(&self, payload: &DeleteUserPort) -> Result<(), Error>;
     async fn get_user(&self, payload: &GetUserPort) -> Result<Option<UserEntity>, Error>;

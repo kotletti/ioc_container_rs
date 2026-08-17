@@ -45,11 +45,9 @@ dependencies = [
 
 [[package]]
 name = "benchmarks"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "ioc_container_rs",
- "tests",
- "tokio",
 ]
 
 [[package]]
@@ -72,7 +70,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "example"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "ioc_container_rs",
@@ -98,11 +96,7 @@ dependencies = [
 
 [[package]]
 name = "ioc_container_rs"
-version = "0.2.1"
-dependencies = [
- "async-trait",
- "tokio",
-]
+version = "0.3.0"
 
 [[package]]
 name = "libc"
@@ -190,15 +184,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "tests"
-version = "0.2.1"
-dependencies = [
- "async-trait",
- "ioc_container_rs",
- "tokio",
 ]
 
 [[package]]

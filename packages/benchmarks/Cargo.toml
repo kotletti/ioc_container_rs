@@ -19,5 +19,3 @@ path = 'src/writeable.rs'
 
 [dependencies]
 ioc_container_rs = { path = "../ioc_container_rs" }
-tests = { path = "../tests" }
-tokio = { workspace = true }

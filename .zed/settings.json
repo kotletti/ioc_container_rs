@@ -1,0 +1,19 @@
+{
+  "languages": {
+    "Rust": {
+      "formatter": [
+        { "language_server": { "name": "rust-analyzer" } }
+      ]
+    },
+    "TOML": {
+      "formatter": [
+        {
+          "external": {
+            "command": "taplo",
+            "arguments": ["fmt", "-"]
+          }
+        }
+      ]
+    }
+  }
+}

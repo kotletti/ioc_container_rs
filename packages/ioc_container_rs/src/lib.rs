@@ -1,4 +1,3 @@
-pub mod container;
-pub mod context;
+pub mod adapters;
 pub mod errors;
 pub mod ports;

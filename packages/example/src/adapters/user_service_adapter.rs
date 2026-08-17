@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use ioc_container_rs::{
     errors::error::Error,
-    ports::{adapter_port::AdapterPort, context_port::ContextPort},
+    ports::{adapter_port::AdapterPort, container_port::ContainerPort},
 };
 
 use crate::{
@@ -17,22 +17,21 @@ use crate::{
     },
 };
 
-use super::user_repository_adapter::UserRepositoryAdapter;
-
 pub struct UserServiceAdapter {
-    context: Arc<dyn ContextPort>,
+    user_repository: Arc<dyn UserRepositoryPort>,
 }
 
 impl UserServiceAdapter {
-    pub fn new(context: Arc<dyn ContextPort>) -> Self {
-        Self { context }
+    pub fn new(user_repository: Arc<dyn UserRepositoryPort>) -> Self {
+        Self { user_repository }
     }
 }
 
-#[async_trait]
-impl AdapterPort<UserServiceAdapter> for UserServiceAdapter {
-    fn token() -> &'static str {
-        "USER_SERVICE_ADAPTER"
+impl AdapterPort for dyn UserServicePort {
+    fn construct(container: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
+        let user_repository = <dyn UserRepositoryPort>::get_adapter(container)?;
+
+        Ok(Arc::new(UserServiceAdapter::new(user_repository)))
     }
 }
 
@@ -44,35 +43,26 @@ impl UserServicePort for UserServiceAdapter {
             email: payload.email.to_string(),
         };
 
-        let user_repository = UserRepositoryAdapter::get_adapter(&self.context).await?;
+        self.user_repository.add_user(&user_entity).await?;
 
-        match user_repository.add_user(&user_entity).await {
-            Ok(_) => Ok(user_entity),
-            Err(e) => Err(e.into()),
-        }
+        Ok(user_entity)
     }
 
     async fn delete_user(&self, payload: &DeleteUserPort) -> Result<(), Error> {
-        let user_repository = UserRepositoryAdapter::get_adapter(&self.context).await?;
+        let user_entity = self
+            .user_repository
+            .get_user_by_email(&payload.email)
+            .await?
+            .ok_or("User not found")?;
 
-        let user_entity = match user_repository.get_user_by_email(&payload.email).await {
-            Ok(Some(user)) => user,
-            Ok(None) => return Err("User not found".into()),
-            Err(e) => return Err(e.into()),
-        };
-
-        user_repository.delete_user(&user_entity).await
+        self.user_repository.delete_user(&user_entity).await
     }
 
     async fn get_user(&self, payload: &GetUserPort) -> Result<Option<UserEntity>, Error> {
-        let user_repository = UserRepositoryAdapter::get_adapter(&self.context).await?;
-
-        user_repository.get_user_by_email(&payload.email).await
+        self.user_repository.get_user_by_email(&payload.email).await
     }
 
     async fn get_count(&self) -> Result<usize, Error> {
-        let user_repository = UserRepositoryAdapter::get_adapter(&self.context).await?;
-
-        user_repository.get_count().await
+        self.user_repository.get_count().await
     }
 }

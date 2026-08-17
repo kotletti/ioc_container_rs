@@ -18,12 +18,7 @@ impl UserRepositoryAdapter {
     }
 }
 
-#[async_trait]
-impl AdapterPort<UserRepositoryAdapter> for UserRepositoryAdapter {
-    fn token() -> &'static str {
-        "USER_REPOSITORY_ADAPTER"
-    }
-}
+impl AdapterPort for dyn UserRepositoryPort {}
 
 #[async_trait]
 impl UserRepositoryPort for UserRepositoryAdapter {
@@ -38,29 +33,22 @@ impl UserRepositoryPort for UserRepositoryAdapter {
     async fn delete_user(&self, entity: &UserEntity) -> Result<(), Error> {
         let mut store = self.store.write().await;
 
-        let index = store.iter().position(|u| u.email == entity.email);
+        let index = store
+            .iter()
+            .position(|u| u.email == entity.email)
+            .ok_or("User not found for delete.")?;
 
-        match index {
-            Some(i) => {
-                store.remove(i);
-                Ok(())
-            }
-            None => Err("User not found for delete.".into()),
-        }
+        store.remove(index);
+
+        Ok(())
     }
 
     async fn get_user_by_email(&self, email: &str) -> Result<Option<UserEntity>, Error> {
         let store = self.store.read().await;
 
-        let index = store.iter().position(|u| u.email == email);
+        let user = store.iter().find(|u| u.email == email).cloned();
 
-        match index {
-            Some(i) => match store.get(i) {
-                Some(user) => Ok(Some(user.clone())),
-                _ => Ok(None),
-            },
-            _ => Ok(None),
-        }
+        Ok(user)
     }
 
     async fn get_count(&self) -> Result<usize, Error> {

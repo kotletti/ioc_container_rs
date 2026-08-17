@@ -1,25 +1,27 @@
-use std::sync::Arc;
+use crate::{errors::error::Error, ports::container_port::ContainerPort};
+use std::{
+    any::{TypeId, type_name},
+    sync::Arc,
+};
 
-use async_trait::async_trait;
+pub trait AdapterPort: Send + Sync + 'static {
+    fn construct(_: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
+        Err(Error::from(format!(
+            "{} has no sync construct; provide it via bind_instance",
+            type_name::<Self>()
+        )))
+    }
 
-use crate::errors::error::Error;
+    fn get_adapter(container: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
+        let key = TypeId::of::<Self>();
+        let name = type_name::<Self>();
 
-use super::context_port::ContextPort;
+        let any = container.clone().resolve(key, name)?;
 
-#[async_trait]
-pub trait AdapterPort<T>: Send + Sync + 'static {
-    fn token() -> &'static str;
+        let arc = any
+            .downcast::<Arc<Self>>()
+            .map_err(|_| Error::from(format!("Cant downcast adapter {name}")))?;
 
-    async fn get_adapter(context: &Arc<dyn ContextPort>) -> Result<Box<Self>, Error>
-    where
-        Self: Sized,
-    {
-        let me = context
-            .resolve_provider(Self::token())
-            .await?
-            .downcast::<Self>()
-            .map_err(|_| format!("Cant resolve provider: {}", Self::token()))?;
-
-        Ok(me)
+        Ok(Arc::clone(&arc))
     }
 }

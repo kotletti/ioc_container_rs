@@ -4,7 +4,7 @@ use ioc_container_rs::errors::error::Error;
 use crate::entities::user_entity::UserEntity;
 
 #[async_trait]
-pub trait UserRepositoryPort {
+pub trait UserRepositoryPort: Send + Sync {
     async fn add_user(&self, entity: &UserEntity) -> Result<(), Error>;
     async fn delete_user(&self, entity: &UserEntity) -> Result<(), Error>;
     async fn get_user_by_email(&self, email: &str) -> Result<Option<UserEntity>, Error>;

@@ -1,162 +1,163 @@
 # IoC container for rust apps
 
-### Container supply async registration & resolving any services or another solutions
+### Container supply registration & resolving any services or another solutions
 
 Simple example (existed in repo)
 
 ```rust
-async fn create_di() -> DI {
-  let di = DI::new(Arc::new(ContainerContext::new()));
-
-  let store: Arc<RwLock<Vec<UserEntity>>> = Arc::new(RwLock::new(vec![]));
-
-  let user_repository_injector = InjectAdapter {
-    token: UserRepositoryAdapter::token(),
-    factory: Arc::new(move |_| UserRepositoryAdapter::new(store.clone())),
-  };
-
-  let di = di
-    .inject(user_repository_injector)
-    .await
-    .expect("UserRepositoryAdapter should be injected");
-
-  let di = di
-    .inject(InjectAdapter {
-      token: UserServiceAdapter::token(),
-      factory: Arc::new(UserServiceAdapter::new),
-    })
-    .await
-    .expect("UserServiceAdapter should be injected");
-
-  di
+pub trait UserRepositoryPort: Send + Sync {
+    fn add_user(&self, entity: &UserEntity) -> Result<(), Error>;
+    fn get_count(&self) -> Result<usize, Error>;
 }
 
-async fn should_be_return_zero_count_from_repository() {
-  let di = create_di().await;
-
-  let context = di.get_context();
-
-  let user_repository = UserRepositoryAdapter::get_adapter(&context).await;
-
-  assert!(user_repository.is_ok());
-
-  let user_repository = user_repository.expect("UserRepository should exist");
-
-  let count = user_repository
-    .get_count()
-    .await
-    .expect("Get count has error");
-
-  assert_eq!(count, 0, "Count should be 0");
+pub struct UserRepositoryAdapter {
+    store: RwLock<Vec<UserEntity>>,
 }
 
-#[tokio::test]
-async fn should_be_return_zero_count_from_service() {
-  let di = create_di().await;
+impl AdapterPort for dyn UserRepositoryPort {
+    fn construct(_: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
+        Ok(Arc::new(UserRepositoryAdapter::new()))
+    }
+}
+```
 
-  let context = di.get_context();
+An adapter keeps its dependencies in fields and resolves them once, inside `construct`
 
-  let user_service = UserServiceAdapter::get_adapter(&context)
-    .await
-    .expect("UserService should exist");
-
-  let count = user_service.get_count().await.expect("Get count has error");
-
-  assert_eq!(count, 0, "Count should be 0");
+```rust
+pub trait UserServicePort: Send + Sync {
+    fn add_user(&self, payload: &AddUserPort) -> Result<UserEntity, Error>;
+    fn get_count(&self) -> Result<usize, Error>;
 }
 
-async fn should_return_new_user() {
-  let di = create_di().await;
-
-  let context = di.get_context();
-
-  let user_service = UserServiceAdapter::get_adapter(&context)
-    .await
-    .expect("UserService should exist");
-
-  let user_entity = user_service
-    .add_user(&AddUserPort {
-      name: "Andrey".to_string(),
-      email: "andrey@mail.ru".to_string(),
-    })
-    .await
-    .expect("Add user has error");
-
-  let count = user_service.get_count().await.expect("Get count has error");
-
-  assert_eq!(count, 1, "Count should be 1");
-  assert_eq!(user_entity.name, "Andrey", "Name should be Andrey");
+pub struct UserServiceAdapter {
+    user_repository: Arc<dyn UserRepositoryPort>,
 }
 
-async fn should_remove_new_user() {
-  let di = create_di().await;
+impl AdapterPort for dyn UserServicePort {
+    fn construct(container: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
+        let user_repository = <dyn UserRepositoryPort>::get_adapter(container)?;
 
-  let context = di.get_context();
-
-  let user_service = UserServiceAdapter::get_adapter(&context)
-    .await
-    .expect("UserService should exist");
-
-  let user_entity = user_service
-    .add_user(&AddUserPort {
-      name: "Andrey".to_string(),
-      email: "andrey@mail.ru".to_string(),
-    })
-    .await
-    .expect("Add user has error");
-
-  user_service
-    .delete_user(&DeleteUserPort {
-      email: user_entity.email.to_string(),
-    })
-    .await
-    .expect("Delete user has error");
-
-  let check_user_entity = user_service
-    .get_user(&GetUserPort {
-      email: user_entity.email.to_string(),
-    })
-    .await
-    .expect("Get user has error");
-
-  assert!(
-    check_user_entity.is_none(),
-    "User after deletion should be None"
-  );
+        Ok(Arc::new(UserServiceAdapter::new(user_repository)))
+    }
 }
+```
+
+Bind the ports and build the container
+
+```rust
+fn create_di() -> Result<Arc<dyn ContainerPort>, Error> {
+    let container = DI::new()
+        .bind::<dyn UserRepositoryPort>()?
+        .bind::<dyn UserServicePort>()?
+        .build::<AppContext>();
+
+    Ok(container)
+}
+```
+
+Use `bind_instance` when the adapter is built outside of the container
+
+```rust
+fn create_di() -> Result<Arc<dyn ContainerPort>, Error> {
+    let store: Arc<RwLock<Vec<UserEntity>>> = Arc::new(RwLock::new(vec![]));
+
+    let user_repository: Arc<dyn UserRepositoryPort> = Arc::new(UserRepositoryAdapter::new(store));
+
+    let container = DI::new()
+        .bind_instance::<dyn UserRepositoryPort>(user_repository)?
+        .bind::<dyn UserServicePort>()?
+        .build::<AppContext>();
+
+    Ok(container)
+}
+```
+
+Resolve an adapter by its port
+
+```rust
+fn should_be_return_zero_count_from_service() -> Result<(), Error> {
+    let container = create_di()?;
+
+    let user_service = <dyn UserServicePort>::get_adapter(&container)?;
+
+    assert_eq!(user_service.get_count()?, 0, "Count should be 0");
+
+    Ok(())
+}
+```
+
+An adapter is built once, every resolve returns the same instance
+
+```rust
+fn should_share_repository_between_service_and_container() -> Result<(), Error> {
+    let container = create_di()?;
+
+    let user_service = <dyn UserServicePort>::get_adapter(&container)?;
+    let user_repository = <dyn UserRepositoryPort>::get_adapter(&container)?;
+
+    user_service.add_user(&AddUserPort {
+        name: "Andrey".to_string(),
+        email: "andrey@mail.ru".to_string(),
+    })?;
+
+    assert_eq!(user_repository.get_count()?, 1);
+
+    Ok(())
+}
+```
+
+A dependency cycle is reported while resolving, not by a stack overflow
+
+```rust
+let Err(error) = <dyn CyclicAPort>::get_adapter(&container) else {
+    return Err(Error::from("Cycle must be detected"));
+};
+
+assert!(error.to_string().contains("Dependency cycle detected"));
 ```
 
 # Benchmarks:
 <b>OS:</b>
-> `Darwin 23.2.0 Darwin Kernel Version 23.2.0: Wed Nov 15 21:53:18 PST 2023; root:xnu-10002.61.3~2/RELEASE_ARM64_T6000 arm64 arm`
+> `Linux 6.12.74+deb13+1-arm64 aarch64`
 
 <b>CPU Info:</b>
 ```
-sysctl -a | grep machdep.cpu
-machdep.cpu.cores_per_package: 10
-machdep.cpu.core_count: 10
-machdep.cpu.logical_per_package: 10
-machdep.cpu.thread_count: 10
-machdep.cpu.brand_string: Apple M1 Max
+lscpu
+Architecture: aarch64
+CPU(s): 8
 ```
+
+Every benchmark builds the same graph twice, with the container and without it, so the difference is the price of the container itself
 
 ```
 Initialization of DI
-Threads per iteration: 10
-Iterations: 10000
-Duration: 170.909333ms
+Threads: 10
+Iterations per thread: 10000
+Rounds: 5
+Failures: 0
+Duration without DI: 1.487773ms
+Duration with DI: 6.77844ms
+Overhead: 5.290667ms
 ```
 
 ```
 Read the data from DI
-Threads per iteration: 10
-Iterations: 10000
-Duration: 221.854958ms
+Threads: 10
+Iterations per thread: 10000
+Rounds: 5
+Failures: 0
+Duration without DI: 21.058915ms
+Duration with DI: 26.03966ms
+Overhead: 4.980745ms
 ```
 
 ```
-Write the data from DI
-Threads per iteration: 10
-Iterations: 10000
-Duration: 253.2085ms
+Write the data to DI
+Threads: 10
+Iterations per thread: 10000
+Rounds: 5
+Failures: 0
+Duration without DI: 16.719222ms
+Duration with DI: 22.553438ms
+Overhead: 5.834216ms
 ```

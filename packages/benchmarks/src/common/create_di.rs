@@ -1,35 +1,30 @@
 use std::sync::Arc;
 
 use ioc_container_rs::{
-    container::di::{InjectAdapter, DI},
-    context::container_context::ContainerContext,
+    adapters::{app_context::AppContext, di::DI},
     errors::error::Error,
-    ports::{adapter_port::AdapterPort, context_port::ContextPort},
-};
-use tests::adapters::{
-    adapter_nested_test::AdapterNested, adapter_number_test::AdapterNumberTest,
-    adapter_string_test::AdapterStringTest,
+    ports::container_port::ContainerPort,
 };
 
-pub async fn create_di() -> Result<Arc<dyn ContextPort>, Error> {
-    let di = DI::new(Arc::new(ContainerContext::new()));
+use crate::adapters::{
+    nested_adapter::{NestedAdapter, NestedPort},
+    number_adapter::{NumberAdapter, NumberPort},
+    string_adapter::{StringAdapter, StringPort},
+};
 
-    let di = di
-        .inject(InjectAdapter {
-            token: AdapterStringTest::token(),
-            factory: Arc::new(|_| AdapterStringTest::new()),
-        })
-        .await?
-        .inject(InjectAdapter {
-            token: AdapterNumberTest::token(),
-            factory: Arc::new(|_| AdapterNumberTest::new()),
-        })
-        .await?
-        .inject(InjectAdapter {
-            token: AdapterNested::token(),
-            factory: Arc::new(AdapterNested::new),
-        })
-        .await?;
+pub fn create_di() -> Result<Arc<dyn ContainerPort>, Error> {
+    let container = DI::new()
+        .bind::<dyn StringPort>()?
+        .bind::<dyn NumberPort>()?
+        .bind::<dyn NestedPort>()?
+        .build::<AppContext>();
 
-    Ok(di.get_context())
+    Ok(container)
+}
+
+pub fn create_graph() -> Arc<dyn NestedPort> {
+    let string: Arc<dyn StringPort> = Arc::new(StringAdapter::new());
+    let number: Arc<dyn NumberPort> = Arc::new(NumberAdapter::new());
+
+    Arc::new(NestedAdapter::new(string, number))
 }

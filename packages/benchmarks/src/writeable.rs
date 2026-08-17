@@ -1,21 +1,20 @@
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    sync::Arc,
-    time::Instant,
+    hint::black_box,
+    thread,
+    time::{Duration, Instant},
 };
 
-use common::create_di::create_di;
-use ioc_container_rs::{
-    errors::error::Error,
-    ports::{adapter_port::AdapterPort, context_port::ContextPort},
+use ioc_container_rs::ports::adapter_port::AdapterPort;
+
+use benchmarks::{
+    adapters::nested_adapter::NestedPort,
+    common::{
+        constants::{ITERATIONS, ROUNDS, THREADS},
+        create_di::{create_di, create_graph},
+    },
 };
-use tests::adapters::adapter_nested_test::{AdapterNested, AdapterNestedPort};
-use tokio::task::JoinHandle;
-
-use crate::common::constants::{ITERATIONS, THREADS};
-
-mod common;
 
 fn generate_random_string(len: usize) -> String {
     let mut result = String::with_capacity(len);
@@ -37,58 +36,83 @@ fn generate_random_string(len: usize) -> String {
     result
 }
 
-async fn write_data(context: &Arc<dyn ContextPort>) -> Result<(), Error> {
-    let svc = AdapterNested::get_adapter(context).await?;
-
-    svc.set_string(&generate_random_string(10)).await?;
-
-    Ok(())
-}
-
-async fn bench() -> Vec<JoinHandle<()>> {
-    let mut handlers: Vec<JoinHandle<()>> = vec![];
-
-    for _ in 0..THREADS {
-        let handle = tokio::spawn(async {
-            let context = create_di().await;
-
-            if context.is_err() {
-                eprintln!("Error creating DI: {:?}", context.err().unwrap());
-                return;
-            }
-
-            let r = write_data(&context.unwrap()).await;
-
-            if r.is_err() {
-                eprintln!("Error writing data: {:?}", r.err().unwrap());
-            }
-        });
-
-        handlers.push(handle);
-    }
-
-    handlers
-}
-
-#[tokio::main]
-async fn main() {
+fn bench(operation: &(impl Fn() -> bool + Sync)) -> (Duration, usize) {
     let start = Instant::now();
 
-    for _ in 0..ITERATIONS {
-        let handlers = bench().await;
+    let failures = thread::scope(|scope| {
+        let mut handlers = Vec::with_capacity(THREADS);
 
-        for handle in handlers {
-            handle.await.unwrap();
+        for _ in 0..THREADS {
+            let handle = scope.spawn(|| {
+                let mut failures = 0;
+
+                for _ in 0..ITERATIONS {
+                    if !operation() {
+                        failures += 1;
+                    }
+                }
+
+                failures
+            });
+
+            handlers.push(handle);
         }
+
+        handlers
+            .into_iter()
+            .map(|handle| handle.join().unwrap_or(ITERATIONS))
+            .sum::<usize>()
+    });
+
+    (start.elapsed(), failures)
+}
+
+fn median(operation: &(impl Fn() -> bool + Sync)) -> (Duration, usize) {
+    bench(operation);
+
+    let mut rounds: Vec<Duration> = vec![];
+    let mut failures = 0;
+
+    for _ in 0..ROUNDS {
+        let (duration, round_failures) = bench(operation);
+
+        rounds.push(duration);
+        failures += round_failures;
     }
 
-    let duration = start.elapsed();
+    rounds.sort();
+
+    (rounds[ROUNDS / 2], failures)
+}
+
+fn main() {
+    let graph = create_graph();
+    let container = create_di().expect("Failed to create DI");
+    let message = generate_random_string(10);
+
+    let (without_di, without_di_failures) =
+        median(&|| black_box(graph.set_string(&message).is_ok()));
+
+    let (with_di, with_di_failures) = median(&|| {
+        let service = match <dyn NestedPort>::get_adapter(&container) {
+            Ok(service) => service,
+            Err(_) => return false,
+        };
+
+        black_box(service.set_string(&message).is_ok())
+    });
 
     println!(
-    "{}",
-    format!(
-      "Write the data from DI\nThreads per iteration: {}\nIterations: {}\nDuration: {:?}\n====================\n",
-      THREADS, ITERATIONS, duration
-    )
-  );
+        "{}",
+        format!(
+            "Write the data to DI\nThreads: {}\nIterations per thread: {}\nRounds: {}\nFailures: {}\nDuration without DI: {:?}\nDuration with DI: {:?}\nOverhead: {:?}\n====================\n",
+            THREADS,
+            ITERATIONS,
+            ROUNDS,
+            without_di_failures + with_di_failures,
+            without_di,
+            with_di,
+            with_di.saturating_sub(without_di)
+        )
+    );
 }
