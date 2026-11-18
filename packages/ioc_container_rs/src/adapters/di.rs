@@ -8,27 +8,27 @@ use crate::{
     errors::error::Error,
     ports::{
         adapter_port::AdapterPort,
-        container_port::{ContainerFactoryItem, ContainerPort, ContainerStorage},
+        container_port::{ContainerFactory, ContainerStorage},
+        context_port::ContextPort,
     },
 };
 
-#[derive(Default)]
 pub struct DI {
     storage: ContainerStorage,
 }
 
 impl DI {
     pub fn new() -> Self {
-        Self {
-            storage: ContainerStorage::new(),
-        }
+        let storage = ContainerStorage::new();
+
+        Self { storage }
     }
 
     fn insert(
         mut self,
         key: TypeId,
         name: &'static str,
-        factory: ContainerFactoryItem,
+        factory: ContainerFactory,
     ) -> Result<Self, Error> {
         if self.storage.contains_key(&key) {
             return Err(Error::from(format!("Port {name} is already bound",)));
@@ -45,41 +45,38 @@ impl DI {
         Ok(self)
     }
 
-    pub fn bind<Port: AdapterPort + ?Sized>(self) -> Result<Self, Error> {
+    pub fn bind<Port, Adapter>(self) -> Result<Self, Error>
+    where
+        Port: Send + Sync + ?Sized + 'static,
+        Adapter: AdapterPort<Port>,
+    {
+        let key = TypeId::of::<Port>();
+        let name = type_name::<Port>();
+
         self.insert(
-            TypeId::of::<Port>(),
-            type_name::<Port>(),
-            Box::new(|container| Ok(Arc::new(Port::construct(&container)?))),
+            key,
+            name,
+            Box::new(|context| {
+                let port = Adapter::construct(&context)?;
+
+                Ok(Arc::new(port))
+            }),
         )
     }
 
-    pub fn bind_instance<Port: AdapterPort + ?Sized>(
-        self,
-        instance: Arc<Port>,
-    ) -> Result<Self, Error> {
-        self.insert(
-            TypeId::of::<Port>(),
-            type_name::<Port>(),
-            Box::new(move |_| Ok(Arc::new(instance.clone()))),
-        )
-    }
-
-    pub fn build<C: ContainerPort>(self) -> Arc<dyn ContainerPort> {
+    pub fn build<C: ContextPort<Storage = ContainerStorage>>(self) -> Arc<C> {
         C::create(self.storage)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::{
-        any::TypeId,
-        sync::{Arc, RwLock},
-    };
+    use std::sync::{Arc, RwLock};
 
     use crate::{
         adapters::{app_context::AppContext, di::DI},
         errors::error::Error,
-        ports::{adapter_port::AdapterPort, container_port::ContainerPort},
+        ports::adapter_port::AdapterPort,
     };
 
     #[derive(Clone, PartialEq)]
@@ -107,9 +104,13 @@ mod test {
         }
     }
 
-    impl AdapterPort for dyn DatabaseServicePort {
-        fn construct(_: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
-            Ok(Arc::new(DatabaseServiceAdapter::new(vec![])))
+    impl AdapterPort<dyn DatabaseServicePort> for DatabaseServiceAdapter {
+        fn construct(_: &Arc<AppContext>) -> Result<Arc<dyn DatabaseServicePort>, Error> {
+            Ok(Arc::new(Self::new(vec![])))
+        }
+
+        async fn create_di(di: DI) -> Result<DI, Error> {
+            di.bind::<dyn DatabaseServicePort, DatabaseServiceAdapter>()
         }
     }
 
@@ -177,11 +178,15 @@ mod test {
         }
     }
 
-    impl AdapterPort for dyn UserServicePort {
-        fn construct(container: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
-            let database = <dyn DatabaseServicePort>::get_adapter(container)?;
+    impl AdapterPort<dyn UserServicePort> for UserServiceAdapter {
+        fn construct(context: &Arc<AppContext>) -> Result<Arc<dyn UserServicePort>, Error> {
+            let database = context.resolve::<dyn DatabaseServicePort>()?;
 
-            Ok(Arc::new(UserServiceAdapter::new(database)))
+            Ok(Arc::new(Self::new(database)))
+        }
+
+        async fn create_di(di: DI) -> Result<DI, Error> {
+            di.bind::<dyn UserServicePort, UserServiceAdapter>()
         }
     }
 
@@ -211,63 +216,86 @@ mod test {
     }
 
     trait NotRegisteredPort: Send + Sync {}
-    impl AdapterPort for dyn NotRegisteredPort {}
 
     trait FailingPort: Send + Sync {}
-    impl AdapterPort for dyn FailingPort {
-        fn construct(_: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
-            Err(Error::from("connection refused"))
+    struct FailingAdapter;
+    impl FailingPort for FailingAdapter {}
+    impl AdapterPort<dyn FailingPort> for FailingAdapter {
+        fn construct(_: &Arc<AppContext>) -> Result<Arc<dyn FailingPort>, Error> {
+            Ok(Arc::new(Self))
+        }
+
+        async fn create_di(di: DI) -> Result<DI, Error> {
+            di.bind::<dyn FailingPort, FailingAdapter>()
         }
     }
 
     trait CyclicAPort: Send + Sync {}
     struct CyclicA;
-    impl AdapterPort for dyn CyclicAPort {
-        fn construct(container: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
-            <dyn CyclicBPort>::get_adapter(container)?;
-            Ok(Arc::new(CyclicA) as Arc<dyn CyclicAPort>)
+    impl CyclicAPort for CyclicA {}
+    impl AdapterPort<dyn CyclicAPort> for CyclicA {
+        fn construct(_: &Arc<AppContext>) -> Result<Arc<dyn CyclicAPort>, Error> {
+            Ok(Arc::new(Self))
+        }
+
+        async fn create_di(di: DI) -> Result<DI, Error> {
+            di.bind::<dyn CyclicAPort, CyclicA>()
         }
     }
-    impl CyclicAPort for CyclicA {}
 
     trait CyclicBPort: Send + Sync {}
     struct CyclicB;
-    impl AdapterPort for dyn CyclicBPort {
-        fn construct(container: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
-            <dyn CyclicAPort>::get_adapter(container)?;
-            Ok(Arc::new(CyclicB) as Arc<dyn CyclicBPort>)
+    impl CyclicBPort for CyclicB {}
+    impl AdapterPort<dyn CyclicBPort> for CyclicB {
+        fn construct(_: &Arc<AppContext>) -> Result<Arc<dyn CyclicBPort>, Error> {
+            Ok(Arc::new(Self))
+        }
+
+        async fn create_di(di: DI) -> Result<DI, Error> {
+            di.bind::<dyn CyclicBPort, CyclicB>()
         }
     }
-    impl CyclicBPort for CyclicB {}
 
-    fn create_di() -> Result<Arc<dyn ContainerPort>, Error> {
-        let container = DI::new()
-            .bind::<dyn DatabaseServicePort>()?
-            .bind::<dyn UserServicePort>()?
-            .build::<AppContext>();
+    async fn create_di() -> Result<Arc<AppContext>, Error> {
+        let di = DI::new();
+        let di = DatabaseServiceAdapter::create_di(di).await?;
+        let di = UserServiceAdapter::create_di(di).await?;
 
-        Ok(container)
+        let context = di.build::<AppContext>();
+
+        Ok(context)
     }
 
-    #[test]
-    fn should_be_success_created_di() -> Result<(), Error> {
-        let di = create_di();
+    #[tokio::test]
+    async fn should_be_success_created_di() -> Result<(), Error> {
+        let di = create_di().await;
 
         assert!(di.is_ok(), "DI creation has failed.");
 
         Ok(())
     }
 
-    #[test]
-    fn should_be_created_new_user_by_db() -> Result<(), Error> {
-        let di = create_di()?;
+    #[tokio::test]
+    async fn should_be_downcast_success() -> Result<(), Error> {
+        let context = create_di().await?;
+
+        let database_service = context.resolve::<dyn DatabaseServicePort>();
+
+        assert!(database_service.is_ok(), "Database service resolve failed.");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn should_be_created_new_user_by_db() -> Result<(), Error> {
+        let context = create_di().await?;
 
         let user = User {
             id: 1,
             name: String::from("Andrey"),
         };
 
-        let database = <dyn DatabaseServicePort>::get_adapter(&di)?;
+        let database = context.resolve::<dyn DatabaseServicePort>()?;
 
         assert!(
             database.create(&user).is_ok(),
@@ -277,10 +305,10 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn should_get_user_after_create() -> Result<(), Error> {
-        let di = create_di()?;
-        let database = <dyn DatabaseServicePort>::get_adapter(&di)?;
+    #[tokio::test]
+    async fn should_get_user_after_create() -> Result<(), Error> {
+        let context = create_di().await?;
+        let database = context.resolve::<dyn DatabaseServicePort>()?;
 
         database.create(&User {
             id: 7,
@@ -292,10 +320,10 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn should_fail_on_duplicate_create() -> Result<(), Error> {
-        let di = create_di()?;
-        let database = <dyn DatabaseServicePort>::get_adapter(&di)?;
+    #[tokio::test]
+    async fn should_fail_on_duplicate_create() -> Result<(), Error> {
+        let di = create_di().await?;
+        let database = di.resolve::<dyn DatabaseServicePort>()?;
         let user = User {
             id: 1,
             name: "Andrey".to_string(),
@@ -308,10 +336,10 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn should_report_is_exists() -> Result<(), Error> {
-        let di = create_di()?;
-        let database = <dyn DatabaseServicePort>::get_adapter(&di)?;
+    #[tokio::test]
+    async fn should_report_is_exists() -> Result<(), Error> {
+        let di = create_di().await?;
+        let database = di.resolve::<dyn DatabaseServicePort>()?;
         let user = User {
             id: 2,
             name: "Ivan".to_string(),
@@ -324,20 +352,20 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn should_resolve_user_service_with_zero_count() -> Result<(), Error> {
-        let di = create_di()?;
-        let service = <dyn UserServicePort>::get_adapter(&di)?;
+    #[tokio::test]
+    async fn should_resolve_user_service_with_zero_count() -> Result<(), Error> {
+        let di = create_di().await?;
+        let service = di.resolve::<dyn UserServicePort>()?;
 
         assert_eq!(service.count()?, 0);
 
         Ok(())
     }
 
-    #[test]
-    fn should_create_user_through_service() -> Result<(), Error> {
-        let di = create_di()?;
-        let service = <dyn UserServicePort>::get_adapter(&di)?;
+    #[tokio::test]
+    async fn should_create_user_through_service() -> Result<(), Error> {
+        let di = create_di().await?;
+        let service = di.resolve::<dyn UserServicePort>()?;
 
         let user = service.create(1, "Andrey")?;
 
@@ -347,20 +375,20 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn should_error_when_user_not_found_through_service() -> Result<(), Error> {
-        let di = create_di()?;
-        let service = <dyn UserServicePort>::get_adapter(&di)?;
+    #[tokio::test]
+    async fn should_error_when_user_not_found_through_service() -> Result<(), Error> {
+        let di = create_di().await?;
+        let service = di.resolve::<dyn UserServicePort>()?;
 
         assert!(service.get(999).is_err(), "unknown user must error");
 
         Ok(())
     }
 
-    #[test]
-    fn should_persist_user_created_through_service() -> Result<(), Error> {
-        let di = create_di()?;
-        let service = <dyn UserServicePort>::get_adapter(&di)?;
+    #[tokio::test]
+    async fn should_persist_user_created_through_service() -> Result<(), Error> {
+        let di = create_di().await?;
+        let service = di.resolve::<dyn UserServicePort>()?;
 
         service.create(1, "Andrey")?;
 
@@ -373,22 +401,31 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn should_report_existed_tokens() -> Result<(), Error> {
-        let di = create_di()?;
+    #[tokio::test]
+    async fn should_report_existed_tokens() -> Result<(), Error> {
+        let di = create_di().await?;
 
-        assert!(di.existed(TypeId::of::<dyn DatabaseServicePort>()));
-        assert!(di.existed(TypeId::of::<dyn UserServicePort>()));
-        assert!(!di.existed(TypeId::of::<dyn NotRegisteredPort>()));
+        assert!(
+            di.resolve::<dyn DatabaseServicePort>().is_ok(),
+            "database is bound"
+        );
+        assert!(
+            di.resolve::<dyn UserServicePort>().is_ok(),
+            "user service is bound"
+        );
+        assert!(
+            di.resolve::<dyn NotRegisteredPort>().is_err(),
+            "not-registered must fail"
+        );
 
         Ok(())
     }
 
-    #[test]
-    fn should_error_on_unknown_token() -> Result<(), Error> {
-        let di = create_di()?;
+    #[tokio::test]
+    async fn should_error_on_unknown_token() -> Result<(), Error> {
+        let di = create_di().await?;
 
-        let Err(error) = <dyn NotRegisteredPort>::get_adapter(&di) else {
+        let Err(error) = di.resolve::<dyn NotRegisteredPort>() else {
             return Err(Error::from("not-found must error, got Ok"));
         };
 
@@ -400,8 +437,8 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn should_resolve_ready_instance_via_bind_instance() -> Result<(), Error> {
+    #[tokio::test]
+    async fn should_resolve_ready_instance_via_bind_instance() -> Result<(), Error> {
         let preloaded = User {
             id: 42,
             name: "Ready".to_string(),
@@ -411,19 +448,19 @@ mod test {
             Arc::new(DatabaseServiceAdapter::new(vec![preloaded.clone()]));
 
         let di = DI::new()
-            .bind_instance::<dyn DatabaseServicePort>(ready.clone())?
+            .bind::<dyn DatabaseServicePort, DatabaseServiceAdapter>()?
             .build::<AppContext>();
 
-        let resolved = <dyn DatabaseServicePort>::get_adapter(&di)?;
+        let resolved = di.resolve::<dyn DatabaseServicePort>()?;
         assert_eq!(resolved.get_by_id(42)?.name, "Ready");
 
         assert!(
             Arc::ptr_eq(&ready, &resolved),
-            "bind_instance must return the bound instance"
+            "bind must return the bound instance"
         );
 
-        let a = <dyn DatabaseServicePort>::get_adapter(&di)?;
-        let b = <dyn DatabaseServicePort>::get_adapter(&di)?;
+        let a = di.resolve::<dyn DatabaseServicePort>()?;
+        let b = di.resolve::<dyn DatabaseServicePort>()?;
         assert!(Arc::ptr_eq(&a, &b), "two resolves must be the same Arc");
 
         Ok(())
@@ -431,9 +468,11 @@ mod test {
 
     #[test]
     fn should_surface_factory_error_instead_of_masking() -> Result<(), Error> {
-        let di = DI::new().bind::<dyn FailingPort>()?.build::<AppContext>();
+        let di = DI::new()
+            .bind::<dyn FailingPort, FailingAdapter>()?
+            .build::<AppContext>();
 
-        let Err(error) = <dyn FailingPort>::get_adapter(&di) else {
+        let Err(error) = di.resolve::<dyn FailingPort>() else {
             return Err(Error::from("factory error must surface, got Ok"));
         };
 
@@ -454,11 +493,11 @@ mod test {
     #[test]
     fn should_detect_dependency_cycle() -> Result<(), Error> {
         let di = DI::new()
-            .bind::<dyn CyclicAPort>()?
-            .bind::<dyn CyclicBPort>()?
+            .bind::<dyn CyclicAPort, CyclicA>()?
+            .bind::<dyn CyclicBPort, CyclicB>()?
             .build::<AppContext>();
 
-        let Err(error) = <dyn CyclicAPort>::get_adapter(&di) else {
+        let Err(error) = di.resolve::<dyn CyclicAPort>() else {
             return Err(Error::from("expected a cycle error, got Ok"));
         };
 
@@ -470,58 +509,42 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn should_keep_chain_clean_after_cycle() -> Result<(), Error> {
+    #[tokio::test]
+    async fn should_keep_chain_clean_after_cycle() -> Result<(), Error> {
         let cyclic = DI::new()
-            .bind::<dyn CyclicAPort>()?
-            .bind::<dyn CyclicBPort>()?
+            .bind::<dyn CyclicAPort, CyclicA>()?
+            .bind::<dyn CyclicBPort, CyclicB>()?
             .build::<AppContext>();
 
         assert!(
-            <dyn CyclicAPort>::get_adapter(&cyclic).is_err(),
+            cyclic.resolve::<dyn CyclicAPort>().is_err(),
             "cycle must be detected"
         );
 
-        let healthy = create_di()?;
+        let healthy = create_di().await?;
 
         assert!(
-            <dyn UserServicePort>::get_adapter(&healthy).is_ok(),
+            healthy.resolve::<dyn UserServicePort>().is_ok(),
             "healthy graph must build after a cycle error in the same thread"
         );
 
         Ok(())
     }
 
-    #[test]
-    fn should_reject_duplicate_bind() -> Result<(), Error> {
-        let Err(error) = DI::new()
-            .bind::<dyn DatabaseServicePort>()?
-            .bind::<dyn DatabaseServicePort>()
-        else {
+    #[tokio::test]
+    async fn should_reject_duplicate_bind() -> Result<(), Error> {
+        let di = DI::new();
+        let di = DatabaseServiceAdapter::create_di(di).await?;
+
+        let di = DatabaseServiceAdapter::create_di(di).await;
+
+        let Err(error) = di else {
             return Err(Error::from("duplicate bind must error, got Ok"));
         };
 
         assert!(
             error.to_string().contains("already bound"),
             "duplicate bind must be reported"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn should_error_when_adapter_has_no_construct() -> Result<(), Error> {
-        let di = DI::new()
-            .bind::<dyn NotRegisteredPort>()?
-            .build::<AppContext>();
-
-        let Err(error) = <dyn NotRegisteredPort>::get_adapter(&di) else {
-            return Err(Error::from("adapter without construct must error, got Ok"));
-        };
-
-        assert!(
-            error.to_string().contains("has no sync construct"),
-            "default construct must explain itself"
         );
 
         Ok(())

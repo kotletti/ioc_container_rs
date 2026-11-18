@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ioc_container_rs::{
     adapters::{app_context::AppContext, di::DI},
     errors::error::Error,
-    ports::container_port::ContainerPort,
+    ports::adapter_port::AdapterPort,
 };
 
 use crate::adapters::{
@@ -12,14 +12,14 @@ use crate::adapters::{
     string_adapter::{StringAdapter, StringPort},
 };
 
-pub fn create_di() -> Result<Arc<dyn ContainerPort>, Error> {
-    let container = DI::new()
-        .bind::<dyn StringPort>()?
-        .bind::<dyn NumberPort>()?
-        .bind::<dyn NestedPort>()?
-        .build::<AppContext>();
+pub async fn create_di() -> Result<Arc<AppContext>, Error> {
+    let di = DI::new();
 
-    Ok(container)
+    let di = StringAdapter::create_di(di).await?;
+    let di = NumberAdapter::create_di(di).await?;
+    let di = NestedAdapter::create_di(di).await?;
+
+    Ok(di.build::<AppContext>())
 }
 
 pub fn create_graph() -> Arc<dyn NestedPort> {

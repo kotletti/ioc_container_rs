@@ -5,6 +5,7 @@ resolver = "2"
 members = [
   "packages/ioc_container_rs",
   "packages/example",
+  "packages/example_domain",
   "packages/benchmarks",
 ]
 

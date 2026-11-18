@@ -1,0 +1,9 @@
+[package]
+name = "example_domain"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ioc_container_rs = { path = "../ioc_container_rs" }
+tokio = { workspace = true }
+async-trait = { workspace = true }

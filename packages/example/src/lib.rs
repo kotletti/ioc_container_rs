@@ -1,52 +1,36 @@
 pub mod adapters;
-pub mod entities;
-pub mod ports;
 
 #[cfg(test)]
 mod tests {
 
     use std::sync::Arc;
 
+    use example_domain::ports::{
+        user_repository_port::UserRepositoryPort, user_service_port::UserServicePort,
+    };
     use ioc_container_rs::{
         adapters::{app_context::AppContext, di::DI},
         errors::error::Error,
-        ports::{adapter_port::AdapterPort, container_port::ContainerPort},
-    };
-    use tokio::sync::RwLock;
-
-    use crate::{
-        adapters::user_repository_adapter::UserRepositoryAdapter,
-        entities::user_entity::UserEntity,
-        ports::{
-            input::{
-                add_user_port::AddUserPort, delete_user_port::DeleteUserPort,
-                get_user_port::GetUserPort,
-            },
-            output::{
-                user_repository_port::UserRepositoryPort, user_service_port::UserServicePort,
-            },
-        },
     };
 
-    fn create_di() -> Result<Arc<dyn ContainerPort>, Error> {
-        let store: Arc<RwLock<Vec<UserEntity>>> = Arc::new(RwLock::new(vec![]));
+    use crate::adapters::{
+        user_repository_adapter::UserRepositoryAdapter, user_service_adapter::UserServiceAdapter,
+    };
 
-        let user_repository: Arc<dyn UserRepositoryPort> =
-            Arc::new(UserRepositoryAdapter::new(store));
-
-        let container = DI::new()
-            .bind_instance::<dyn UserRepositoryPort>(user_repository)?
-            .bind::<dyn UserServicePort>()?
+    fn create_di() -> Result<Arc<AppContext>, Error> {
+        let di = DI::new()
+            .bind::<dyn UserRepositoryPort, UserRepositoryAdapter>()?
+            .bind::<dyn UserServicePort, UserServiceAdapter>()?
             .build::<AppContext>();
 
-        Ok(container)
+        Ok(di)
     }
 
     #[tokio::test]
     async fn should_be_return_zero_count_from_repository() -> Result<(), Error> {
-        let container = create_di()?;
+        let context = create_di()?;
 
-        let user_repository = <dyn UserRepositoryPort>::get_adapter(&container)?;
+        let user_repository = context.resolve::<dyn UserRepositoryPort>()?;
 
         assert_eq!(user_repository.get_count().await?, 0, "Count should be 0");
 
@@ -55,9 +39,9 @@ mod tests {
 
     #[tokio::test]
     async fn should_be_return_zero_count_from_service() -> Result<(), Error> {
-        let container = create_di()?;
+        let context = create_di()?;
 
-        let user_service = <dyn UserServicePort>::get_adapter(&container)?;
+        let user_service = context.resolve::<dyn UserServicePort>()?;
 
         assert_eq!(user_service.get_count().await?, 0, "Count should be 0");
 
@@ -66,16 +50,11 @@ mod tests {
 
     #[tokio::test]
     async fn should_return_new_user() -> Result<(), Error> {
-        let container = create_di()?;
+        let context = create_di()?;
 
-        let user_service = <dyn UserServicePort>::get_adapter(&container)?;
+        let user_service = context.resolve::<dyn UserServicePort>()?;
 
-        let user_entity = user_service
-            .add_user(&AddUserPort {
-                name: "Andrey".to_string(),
-                email: "andrey@mail.ru".to_string(),
-            })
-            .await?;
+        let user_entity = user_service.add_user(1, "Andrey", "andrey@mail.ru").await?;
 
         assert_eq!(user_service.get_count().await?, 1, "Count should be 1");
         assert_eq!(user_entity.name, "Andrey", "Name should be Andrey");
@@ -85,32 +64,19 @@ mod tests {
 
     #[tokio::test]
     async fn should_remove_new_user() -> Result<(), Error> {
-        let container = create_di()?;
+        let context = create_di()?;
 
-        let user_service = <dyn UserServicePort>::get_adapter(&container)?;
+        let user_service = context.resolve::<dyn UserServicePort>()?;
 
-        let user_entity = user_service
-            .add_user(&AddUserPort {
-                name: "Andrey".to_string(),
-                email: "andrey@mail.ru".to_string(),
-            })
-            .await?;
+        let user_entity = user_service.add_user(1, "Andrey", "andrey@mail.ru").await?;
 
-        user_service
-            .delete_user(&DeleteUserPort {
-                email: user_entity.email.to_string(),
-            })
-            .await?;
+        user_service.delete_user(user_entity.id).await?;
 
-        let check_user_entity = user_service
-            .get_user(&GetUserPort {
-                email: user_entity.email.to_string(),
-            })
-            .await?;
+        let check_user_entity = user_service.get_user(user_entity.id).await;
 
         assert!(
-            check_user_entity.is_none(),
-            "User after deletion should be None"
+            check_user_entity.is_err(),
+            "User after deletion should be not exists"
         );
 
         Ok(())
@@ -118,17 +84,12 @@ mod tests {
 
     #[tokio::test]
     async fn should_share_repository_between_service_and_container() -> Result<(), Error> {
-        let container = create_di()?;
+        let context = create_di()?;
 
-        let user_service = <dyn UserServicePort>::get_adapter(&container)?;
-        let user_repository = <dyn UserRepositoryPort>::get_adapter(&container)?;
+        let user_service = context.resolve::<dyn UserServicePort>()?;
+        let user_repository = context.resolve::<dyn UserRepositoryPort>()?;
 
-        user_service
-            .add_user(&AddUserPort {
-                name: "Andrey".to_string(),
-                email: "andrey@mail.ru".to_string(),
-            })
-            .await?;
+        user_service.add_user(1, "Andrey", "andrey@mail.ru").await?;
 
         assert_eq!(
             user_repository.get_count().await?,
@@ -141,11 +102,11 @@ mod tests {
 
     #[tokio::test]
     async fn should_error_when_adapter_is_not_bound() -> Result<(), Error> {
-        let container = DI::new()
-            .bind::<dyn UserServicePort>()?
+        let context = DI::new()
+            .bind::<dyn UserServicePort, UserServiceAdapter>()?
             .build::<AppContext>();
 
-        let Err(error) = <dyn UserServicePort>::get_adapter(&container) else {
+        let Err(error) = context.resolve::<dyn UserServicePort>() else {
             return Err(Error::from("Resolve without repository must error"));
         };
 

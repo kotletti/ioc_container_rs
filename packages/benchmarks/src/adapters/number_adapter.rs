@@ -1,8 +1,9 @@
 use std::sync::{Arc, RwLock};
 
 use ioc_container_rs::{
+    adapters::{app_context::AppContext, di::DI},
     errors::error::Error,
-    ports::{adapter_port::AdapterPort, container_port::ContainerPort},
+    ports::adapter_port::AdapterPort,
 };
 
 pub trait NumberPort: Send + Sync {
@@ -28,9 +29,13 @@ impl Default for NumberAdapter {
     }
 }
 
-impl AdapterPort for dyn NumberPort {
-    fn construct(_: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
+impl AdapterPort<dyn NumberPort> for NumberAdapter {
+    fn construct(_: &Arc<AppContext>) -> Result<Arc<dyn NumberPort>, Error> {
         Ok(Arc::new(NumberAdapter::new()))
+    }
+
+    async fn create_di(di: DI) -> Result<DI, Error> {
+        di.bind::<dyn NumberPort, Self>()
     }
 }
 

@@ -1,27 +1,15 @@
-use crate::{errors::error::Error, ports::container_port::ContainerPort};
-use std::{
-    any::{TypeId, type_name},
-    sync::Arc,
+use crate::{
+    adapters::{app_context::AppContext, di::DI},
+    errors::error::Error,
 };
+use std::sync::Arc;
 
-pub trait AdapterPort: Send + Sync + 'static {
-    fn construct(_: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
-        Err(Error::from(format!(
-            "{} has no sync construct; provide it via bind_instance",
-            type_name::<Self>()
-        )))
+pub trait AdapterPort<Port: Send + Sync + ?Sized + 'static> {
+    fn construct(context: &Arc<AppContext>) -> Result<Arc<Port>, Error>;
+
+    fn get_adapter(context: &Arc<AppContext>) -> Result<Arc<Port>, Error> {
+        context.resolve::<Port>()
     }
 
-    fn get_adapter(container: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
-        let key = TypeId::of::<Self>();
-        let name = type_name::<Self>();
-
-        let any = container.clone().resolve(key, name)?;
-
-        let arc = any
-            .downcast::<Arc<Self>>()
-            .map_err(|_| Error::from(format!("Cant downcast adapter {name}")))?;
-
-        Ok(Arc::clone(&arc))
-    }
+    fn create_di(di: DI) -> impl Future<Output = Result<DI, Error>>;
 }

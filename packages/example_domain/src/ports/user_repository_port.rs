@@ -7,6 +7,6 @@ use crate::entities::user_entity::UserEntity;
 pub trait UserRepositoryPort: Send + Sync {
     async fn add_user(&self, entity: &UserEntity) -> Result<(), Error>;
     async fn delete_user(&self, entity: &UserEntity) -> Result<(), Error>;
-    async fn get_user_by_email(&self, email: &str) -> Result<Option<UserEntity>, Error>;
+    async fn get_user_by_id(&self, id: u32) -> Result<UserEntity, Error>;
     async fn get_count(&self) -> Result<usize, Error>;
 }

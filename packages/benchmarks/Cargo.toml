@@ -15,7 +15,6 @@ path = "src/readable.rs"
 name = 'writeable'
 path = 'src/writeable.rs'
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 ioc_container_rs = { path = "../ioc_container_rs" }
+tokio = { workspace = true }

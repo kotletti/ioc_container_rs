@@ -1,20 +1,14 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ioc_container_rs::{
-    errors::error::Error,
-    ports::{adapter_port::AdapterPort, container_port::ContainerPort},
-};
-
-use crate::{
+use example_domain::{
     entities::user_entity::UserEntity,
-    ports::{
-        input::{
-            add_user_port::AddUserPort, delete_user_port::DeleteUserPort,
-            get_user_port::GetUserPort,
-        },
-        output::{user_repository_port::UserRepositoryPort, user_service_port::UserServicePort},
-    },
+    ports::{user_repository_port::UserRepositoryPort, user_service_port::UserServicePort},
+};
+use ioc_container_rs::{
+    adapters::{app_context::AppContext, di::DI},
+    errors::error::Error,
+    ports::adapter_port::AdapterPort,
 };
 
 pub struct UserServiceAdapter {
@@ -27,20 +21,25 @@ impl UserServiceAdapter {
     }
 }
 
-impl AdapterPort for dyn UserServicePort {
-    fn construct(container: &Arc<dyn ContainerPort>) -> Result<Arc<Self>, Error> {
-        let user_repository = <dyn UserRepositoryPort>::get_adapter(container)?;
+impl AdapterPort<dyn UserServicePort> for UserServiceAdapter {
+    fn construct(context: &Arc<AppContext>) -> Result<Arc<dyn UserServicePort>, Error> {
+        let user_repository = context.resolve::<dyn UserRepositoryPort>()?;
 
         Ok(Arc::new(UserServiceAdapter::new(user_repository)))
+    }
+
+    async fn create_di(di: DI) -> Result<DI, Error> {
+        di.bind::<dyn UserServicePort, Self>()
     }
 }
 
 #[async_trait]
 impl UserServicePort for UserServiceAdapter {
-    async fn add_user(&self, payload: &AddUserPort) -> Result<UserEntity, Error> {
+    async fn add_user(&self, id: u32, name: &str, email: &str) -> Result<UserEntity, Error> {
         let user_entity = UserEntity {
-            name: payload.name.to_string(),
-            email: payload.email.to_string(),
+            id,
+            name: name.to_owned(),
+            email: email.to_owned(),
         };
 
         self.user_repository.add_user(&user_entity).await?;
@@ -48,18 +47,14 @@ impl UserServicePort for UserServiceAdapter {
         Ok(user_entity)
     }
 
-    async fn delete_user(&self, payload: &DeleteUserPort) -> Result<(), Error> {
-        let user_entity = self
-            .user_repository
-            .get_user_by_email(&payload.email)
-            .await?
-            .ok_or("User not found")?;
+    async fn delete_user(&self, id: u32) -> Result<(), Error> {
+        let user_entity = self.user_repository.get_user_by_id(id).await?;
 
         self.user_repository.delete_user(&user_entity).await
     }
 
-    async fn get_user(&self, payload: &GetUserPort) -> Result<Option<UserEntity>, Error> {
-        self.user_repository.get_user_by_email(&payload.email).await
+    async fn get_user(&self, id: u32) -> Result<UserEntity, Error> {
+        self.user_repository.get_user_by_id(id).await
     }
 
     async fn get_count(&self) -> Result<usize, Error> {

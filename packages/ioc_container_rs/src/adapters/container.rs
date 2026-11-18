@@ -1,39 +1,15 @@
 use crate::{
     errors::error::Error,
-    ports::container_port::{ContainerFactoryItem, ContainerPort, ContainerStorage},
+    ports::container_port::{ContainerPort, ContainerSlot, ContainerStorage},
 };
 use std::{
-    any::{Any, TypeId},
+    any::TypeId,
     collections::HashMap,
     sync::{Arc, OnceLock},
 };
 
-struct Slot {
-    factory: ContainerFactoryItem,
-    cache: OnceLock<Arc<dyn Any + Send + Sync>>,
-}
-
 pub struct Container {
-    slots: HashMap<TypeId, Slot>,
-}
-
-impl Container {
-    pub fn new(storage: ContainerStorage) -> Arc<Self> {
-        let slots = storage
-            .into_iter()
-            .map(|(token, factory)| {
-                (
-                    token,
-                    Slot {
-                        factory,
-                        cache: OnceLock::new(),
-                    },
-                )
-            })
-            .collect();
-
-        Arc::new(Self { slots })
-    }
+    slots: HashMap<TypeId, Arc<ContainerSlot>>,
 }
 
 impl ContainerPort for Container {
@@ -41,27 +17,35 @@ impl ContainerPort for Container {
     where
         Self: Sized,
     {
-        Self::new(storage)
+        let slots = storage
+            .into_iter()
+            .map(|(token, factory)| {
+                (
+                    token,
+                    Arc::new(ContainerSlot::new(factory, OnceLock::new())),
+                )
+            })
+            .collect();
+
+        Arc::new(Self { slots })
     }
 
-    fn resolve(
-        self: Arc<Self>,
-        key: TypeId,
-        name: &'static str,
-    ) -> Result<Arc<dyn Any + Send + Sync>, Error> {
+    fn get(self: Arc<Self>, key: TypeId, name: &'static str) -> Result<Arc<ContainerSlot>, Error> {
         let slot = self
             .slots
             .get(&key)
             .ok_or_else(|| Error::from(format!("Adapter {name} has not exists in container")))?;
 
-        if let Some(instance) = slot.cache.get() {
-            return Ok(instance.clone());
-        }
+        // if let Some(instance) = slot.cache.get() {
+        //     return Ok(instance.clone());
+        // }
 
-        let built = (slot.factory)(self.clone());
-        let instance = built?;
+        // let built = (slot.factory)(self.clone());
+        // let instance = built?;
 
-        Ok(slot.cache.get_or_init(|| instance).clone())
+        // Ok(slot.cache.get_or_init(|| instance).clone())
+
+        Ok(slot.clone())
     }
 
     fn existed(&self, key: TypeId) -> bool {

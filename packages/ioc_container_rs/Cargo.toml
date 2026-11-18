@@ -8,6 +8,5 @@ homepage = "https://github.com/kotletti/ioc_container_rs"
 repository = "https://github.com/kotletti/ioc_container_rs"
 readme = "../../README.md"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+[dev-dependencies]
+tokio = { workspace = true }

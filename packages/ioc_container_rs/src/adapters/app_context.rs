@@ -1,44 +1,60 @@
 use std::{
-    any::{Any, TypeId},
+    any::{Any, TypeId, type_name},
     sync::Arc,
 };
 
 use crate::{
     adapters::container::Container,
     errors::error::Error,
-    ports::container_port::{ContainerPort, ContainerStorage},
+    ports::{
+        container_port::{ContainerPort, ContainerStorage},
+        context_port::ContextPort,
+    },
 };
 
-pub struct AppContext {
-    context: Arc<dyn ContainerPort>,
-}
+pub struct AppContext(Arc<dyn ContainerPort>);
 
 impl AppContext {
-    pub fn new(context: Arc<dyn ContainerPort>) -> Self {
-        Self { context }
+    pub fn resolve<T: Send + Sync + 'static + ?Sized>(self: &Arc<Self>) -> Result<Arc<T>, Error> {
+        let key = TypeId::of::<T>();
+        let name = type_name::<T>();
+
+        let slot = self.container().get(key, name)?;
+
+        if let Some(instance) = slot.cache().get() {
+            return self.downcast::<T>(instance.clone());
+        }
+
+        let factory = slot.factory();
+        let any = factory(self.clone())?;
+
+        let instance = slot.cache().get_or_init(|| any).clone();
+
+        self.downcast::<T>(instance)
     }
 
-    pub fn context(&self) -> Arc<dyn ContainerPort> {
-        self.context.clone()
+    fn downcast<T: Send + Sync + ?Sized + 'static>(
+        &self,
+        any: Arc<dyn Any>,
+    ) -> Result<Arc<T>, Error> {
+        let name = type_name::<T>();
+
+        let arc = any
+            .downcast_ref::<Arc<T>>()
+            .ok_or(format!("Cant downcast adapter {name}"))?;
+
+        Ok(arc.clone())
+    }
+
+    fn container(&self) -> Arc<dyn ContainerPort> {
+        self.0.clone()
     }
 }
 
-impl ContainerPort for AppContext {
-    fn create(storage: ContainerStorage) -> Arc<Self> {
-        Arc::new(Self {
-            context: Container::create(storage),
-        })
-    }
+impl ContextPort for AppContext {
+    type Storage = ContainerStorage;
 
-    fn resolve(
-        self: Arc<Self>,
-        key: TypeId,
-        name: &'static str,
-    ) -> Result<Arc<dyn Any + Send + Sync>, Error> {
-        self.context.clone().resolve(key, name)
-    }
-
-    fn existed(&self, key: TypeId) -> bool {
-        self.context.existed(key)
+    fn create(storage: Self::Storage) -> Arc<Self> {
+        Arc::new(Self(Container::create(storage)))
     }
 }

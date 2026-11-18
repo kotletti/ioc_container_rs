@@ -3,9 +3,8 @@ name = "example"
 version.workspace = true
 edition.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+example_domain = { path = "../example_domain" }
 ioc_container_rs = { path = "../ioc_container_rs" }
 tokio = { workspace = true }
 async-trait = { workspace = true }
