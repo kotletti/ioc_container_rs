@@ -1,60 +1,32 @@
-use std::{
-    any::{Any, TypeId, type_name},
-    sync::Arc,
-};
+use std::{any::TypeId, collections::HashMap};
 
 use crate::{
     adapters::container::Container,
     errors::error::Error,
     ports::{
-        container_port::{ContainerPort, ContainerStorage},
-        context_port::ContextPort,
+        container_port::{ContainerPort, ContainerValue},
+        context_port::{ContextReaderPort, ContextWriterPort},
     },
 };
 
-pub struct AppContext(Arc<dyn ContainerPort>);
+pub struct AppContext(Box<dyn ContainerPort>);
 
-impl AppContext {
-    pub fn resolve<T: Send + Sync + 'static + ?Sized>(self: &Arc<Self>) -> Result<Arc<T>, Error> {
-        let key = TypeId::of::<T>();
-        let name = type_name::<T>();
-
-        let slot = self.container().get(key, name)?;
-
-        if let Some(instance) = slot.cache().get() {
-            return self.downcast::<T>(instance.clone());
-        }
-
-        let factory = slot.factory();
-        let any = factory(self.clone())?;
-
-        let instance = slot.cache().get_or_init(|| any).clone();
-
-        self.downcast::<T>(instance)
-    }
-
-    fn downcast<T: Send + Sync + ?Sized + 'static>(
-        &self,
-        any: Arc<dyn Any>,
-    ) -> Result<Arc<T>, Error> {
-        let name = type_name::<T>();
-
-        let arc = any
-            .downcast_ref::<Arc<T>>()
-            .ok_or(format!("Cant downcast adapter {name}"))?;
-
-        Ok(arc.clone())
-    }
-
-    fn container(&self) -> Arc<dyn ContainerPort> {
-        self.0.clone()
+impl Default for AppContext {
+    fn default() -> Self {
+        Self(Box::new(Container::create(HashMap::new())))
     }
 }
 
-impl ContextPort for AppContext {
-    type Storage = ContainerStorage;
+impl ContextReaderPort for AppContext {
+    fn read(&self, key: TypeId, name: &'static str) -> Result<ContainerValue, Error> {
+        self.0.get(key, name)
+    }
+}
 
-    fn create(storage: Self::Storage) -> Arc<Self> {
-        Arc::new(Self(Container::create(storage)))
+impl ContextWriterPort for AppContext {
+    fn write(&mut self, key: TypeId, value: ContainerValue) -> Result<(), Error> {
+        self.0.insert(key, value);
+
+        Ok(())
     }
 }

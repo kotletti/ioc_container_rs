@@ -2,8 +2,7 @@ pub mod adapters;
 
 #[cfg(test)]
 mod tests {
-
-    use std::sync::Arc;
+    use std::{any::type_name, sync::Arc};
 
     use example_domain::ports::{
         user_repository_port::UserRepositoryPort, user_service_port::UserServicePort,
@@ -11,24 +10,24 @@ mod tests {
     use ioc_container_rs::{
         adapters::{app_context::AppContext, di::DI},
         errors::error::Error,
+        ports::context_port::ContextResolverPort,
     };
 
     use crate::adapters::{
         user_repository_adapter::UserRepositoryAdapter, user_service_adapter::UserServiceAdapter,
     };
 
-    fn create_di() -> Result<Arc<AppContext>, Error> {
-        let di = DI::new()
-            .bind::<dyn UserRepositoryPort, UserRepositoryAdapter>()?
-            .bind::<dyn UserServicePort, UserServiceAdapter>()?
-            .build::<AppContext>();
-
-        Ok(di)
+    async fn create_di() -> Result<Arc<AppContext>, Error> {
+        DI::<AppContext>::default()
+            .bind::<dyn UserRepositoryPort, UserRepositoryAdapter>()
+            .bind::<dyn UserServicePort, UserServiceAdapter>()
+            .build()
+            .await
     }
 
     #[tokio::test]
     async fn should_be_return_zero_count_from_repository() -> Result<(), Error> {
-        let context = create_di()?;
+        let context = create_di().await?;
 
         let user_repository = context.resolve::<dyn UserRepositoryPort>()?;
 
@@ -39,7 +38,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_be_return_zero_count_from_service() -> Result<(), Error> {
-        let context = create_di()?;
+        let context = create_di().await?;
 
         let user_service = context.resolve::<dyn UserServicePort>()?;
 
@@ -50,7 +49,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_return_new_user() -> Result<(), Error> {
-        let context = create_di()?;
+        let context = create_di().await?;
 
         let user_service = context.resolve::<dyn UserServicePort>()?;
 
@@ -64,7 +63,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_remove_new_user() -> Result<(), Error> {
-        let context = create_di()?;
+        let context = create_di().await?;
 
         let user_service = context.resolve::<dyn UserServicePort>()?;
 
@@ -84,7 +83,7 @@ mod tests {
 
     #[tokio::test]
     async fn should_share_repository_between_service_and_container() -> Result<(), Error> {
-        let context = create_di()?;
+        let context = create_di().await?;
 
         let user_service = context.resolve::<dyn UserServicePort>()?;
         let user_repository = context.resolve::<dyn UserRepositoryPort>()?;
@@ -102,16 +101,21 @@ mod tests {
 
     #[tokio::test]
     async fn should_error_when_adapter_is_not_bound() -> Result<(), Error> {
-        let context = DI::new()
-            .bind::<dyn UserServicePort, UserServiceAdapter>()?
-            .build::<AppContext>();
+        let di = DI::<AppContext>::default()
+            .bind::<dyn UserServicePort, UserServiceAdapter>()
+            .build()
+            .await;
 
-        let Err(error) = context.resolve::<dyn UserServicePort>() else {
+        let Err(error) = di else {
             return Err(Error::from("Resolve without repository must error"));
         };
 
+        let name = type_name::<dyn UserRepositoryPort>();
+
         assert!(
-            error.to_string().contains("UserRepositoryPort"),
+            error
+                .to_string()
+                .contains(&format!("Adapter {name} is not built")),
             "Error should name the missing port"
         );
 

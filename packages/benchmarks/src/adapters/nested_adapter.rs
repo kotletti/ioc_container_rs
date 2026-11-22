@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use ioc_container_rs::{
-    adapters::{app_context::AppContext, di::DI},
     errors::error::Error,
-    ports::adapter_port::AdapterPort,
+    ports::{adapter_port::AdapterPort, context_port::ContextResolverPort},
 };
 
 use crate::adapters::{number_adapter::NumberPort, string_adapter::StringPort};
@@ -26,16 +25,12 @@ impl NestedAdapter {
     }
 }
 
-impl AdapterPort<dyn NestedPort> for NestedAdapter {
-    fn construct(context: &Arc<AppContext>) -> Result<Arc<dyn NestedPort>, Error> {
+impl<Context: ContextResolverPort> AdapterPort<dyn NestedPort, Context> for NestedAdapter {
+    async fn construct(context: &Context) -> Result<Arc<dyn NestedPort>, Error> {
         let string = context.resolve::<dyn StringPort>()?;
         let number = context.resolve::<dyn NumberPort>()?;
 
-        Ok(Arc::new(NestedAdapter::new(string, number)))
-    }
-
-    async fn create_di(di: DI) -> Result<DI, Error> {
-        di.bind::<dyn NestedPort, Self>()
+        Ok(Arc::new(Self::new(string, number)))
     }
 }
 

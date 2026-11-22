@@ -5,9 +5,8 @@ use example_domain::{
     entities::user_entity::UserEntity, ports::user_repository_port::UserRepositoryPort,
 };
 use ioc_container_rs::{
-    adapters::{app_context::AppContext, di::DI},
     errors::error::Error,
-    ports::adapter_port::AdapterPort,
+    ports::{adapter_port::AdapterPort, context_port::ContextResolverPort},
 };
 use tokio::sync::RwLock;
 
@@ -21,13 +20,11 @@ impl UserRepositoryAdapter {
     }
 }
 
-impl AdapterPort<dyn UserRepositoryPort> for UserRepositoryAdapter {
-    fn construct(_: &Arc<AppContext>) -> Result<Arc<dyn UserRepositoryPort>, Error> {
+impl<Context: ContextResolverPort> AdapterPort<dyn UserRepositoryPort, Context>
+    for UserRepositoryAdapter
+{
+    async fn construct(_: &Context) -> Result<Arc<dyn UserRepositoryPort>, Error> {
         Ok(Arc::new(Self::new(Arc::new(RwLock::new(vec![])))))
-    }
-
-    async fn create_di(di: DI) -> Result<DI, Error> {
-        di.bind::<dyn UserRepositoryPort, Self>()
     }
 }
 

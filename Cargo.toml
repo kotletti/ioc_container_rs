@@ -1,6 +1,6 @@
 [workspace]
 package.edition = "2024"
-package.version = "0.3.0"
+package.version = "0.4.0"
 resolver = "2"
 members = [
   "packages/ioc_container_rs",
@@ -10,5 +10,5 @@ members = [
 ]
 
 [workspace.dependencies]
-tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros", "sync"] }
-async-trait = "0.1.88"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "sync"] }
+async-trait = "0.1.92"

@@ -9,4 +9,4 @@ repository = "https://github.com/kotletti/ioc_container_rs"
 readme = "../../README.md"
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }

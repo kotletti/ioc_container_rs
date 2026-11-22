@@ -1,5 +1,25 @@
 # Changelog
 
+## Version 0.4.0 BREAKING CHANGES
+* Build adapters eagerly and asynchronously in `DI::build().await`, in the order of `bind`
+* Make `AdapterPort::construct` async: an adapter can open a connection right inside it
+* Make `AdapterPort` generic over the context: `AdapterPort<Port, Context>`, `construct(&Context)`
+* Make `resolve` synchronous, it only reads instances that are already built
+* Make `bind` infallible, report every duplicated port from `build` before any adapter is built
+* Return the error of a failed `construct` from `build` and stop building the rest
+* Report a missing dependency, a wrong bind order or a dependency cycle as `Adapter ... is not built`
+* Remove lazy factories, the `OnceLock` cache, `ContainerSlot` and `ChainGuard` cycle detection
+* Remove `bind_instance`, every value comes from `construct`
+* Split the context into ports `ContextReaderPort`, `ContextWriterPort` & `ContextResolverPort`, remove `ContextPort`
+* Implement `ContextResolverPort::resolve` once for every `ContextReaderPort`
+* Make `DI<Context>` generic over the context, add `AppDI` alias for `DI<AppContext>`
+* Support custom contexts and context capabilities through ports
+* Store ready instances in `ContainerPort`
+* Make the container work the same on `current_thread` & `multi_thread` runtimes
+* Move domain ports of the example to `example_domain` crate
+* Split library tests into `base_test`, `context_test` & `runtime_test`
+* Share the measuring code of benchmarks in `bench.rs`, rename `benchmarks.bash` to `benchmarks.sh`
+
 ## Version 0.3.0 BREAKING CHANGES
 * Make the container synchronous, remove `async`/`await` from registration and resolving
 * Drop `tokio` & `async-trait` from the library deps

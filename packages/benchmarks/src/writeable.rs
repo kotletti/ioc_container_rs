@@ -12,6 +12,7 @@ use benchmarks::{
         create_di::{create_di, create_graph},
     },
 };
+use ioc_container_rs::ports::context_port::ContextResolverPort;
 
 fn generate_random_string(len: usize) -> String {
     let mut result = String::with_capacity(len);

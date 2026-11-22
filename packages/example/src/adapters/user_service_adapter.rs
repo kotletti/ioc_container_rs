@@ -6,9 +6,8 @@ use example_domain::{
     ports::{user_repository_port::UserRepositoryPort, user_service_port::UserServicePort},
 };
 use ioc_container_rs::{
-    adapters::{app_context::AppContext, di::DI},
     errors::error::Error,
-    ports::adapter_port::AdapterPort,
+    ports::{adapter_port::AdapterPort, context_port::ContextResolverPort},
 };
 
 pub struct UserServiceAdapter {
@@ -21,15 +20,13 @@ impl UserServiceAdapter {
     }
 }
 
-impl AdapterPort<dyn UserServicePort> for UserServiceAdapter {
-    fn construct(context: &Arc<AppContext>) -> Result<Arc<dyn UserServicePort>, Error> {
+impl<Context: ContextResolverPort> AdapterPort<dyn UserServicePort, Context>
+    for UserServiceAdapter
+{
+    async fn construct(context: &Context) -> Result<Arc<dyn UserServicePort>, Error> {
         let user_repository = context.resolve::<dyn UserRepositoryPort>()?;
 
         Ok(Arc::new(UserServiceAdapter::new(user_repository)))
-    }
-
-    async fn create_di(di: DI) -> Result<DI, Error> {
-        di.bind::<dyn UserServicePort, Self>()
     }
 }
 

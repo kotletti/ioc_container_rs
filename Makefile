@@ -15,5 +15,13 @@ test:
 
 .PHONY: benchmarks
 benchmarks:
-	chmod +x ./benchmarks.bash
-	./benchmarks.bash
+	chmod +x ./benchmarks.sh
+	./benchmarks.sh
+
+.PHONY: clippy
+clippy:
+	cargo clippy
+
+
+.PHONY: ci
+ci: rebuild test clippy

@@ -1,54 +1,30 @@
 use crate::{
     errors::error::Error,
-    ports::container_port::{ContainerPort, ContainerSlot, ContainerStorage},
+    ports::container_port::{ContainerPort, ContainerStorage, ContainerValue},
 };
-use std::{
-    any::TypeId,
-    collections::HashMap,
-    sync::{Arc, OnceLock},
-};
+use std::any::TypeId;
 
 pub struct Container {
-    slots: HashMap<TypeId, Arc<ContainerSlot>>,
+    storage: ContainerStorage,
 }
 
 impl ContainerPort for Container {
-    fn create(storage: ContainerStorage) -> Arc<Self>
-    where
-        Self: Sized,
-    {
-        let slots = storage
-            .into_iter()
-            .map(|(token, factory)| {
-                (
-                    token,
-                    Arc::new(ContainerSlot::new(factory, OnceLock::new())),
-                )
-            })
-            .collect();
-
-        Arc::new(Self { slots })
+    fn create(storage: ContainerStorage) -> Self {
+        Self { storage }
     }
 
-    fn get(self: Arc<Self>, key: TypeId, name: &'static str) -> Result<Arc<ContainerSlot>, Error> {
-        let slot = self
-            .slots
+    fn get(&self, key: TypeId, name: &'static str) -> Result<ContainerValue, Error> {
+        self.storage
             .get(&key)
-            .ok_or_else(|| Error::from(format!("Adapter {name} has not exists in container")))?;
+            .cloned()
+            .ok_or_else(|| Error::from(format!("Adapter {name} is not built")))
+    }
 
-        // if let Some(instance) = slot.cache.get() {
-        //     return Ok(instance.clone());
-        // }
-
-        // let built = (slot.factory)(self.clone());
-        // let instance = built?;
-
-        // Ok(slot.cache.get_or_init(|| instance).clone())
-
-        Ok(slot.clone())
+    fn insert(&mut self, key: TypeId, value: ContainerValue) {
+        self.storage.insert(key, value);
     }
 
     fn existed(&self, key: TypeId) -> bool {
-        self.slots.contains_key(&key)
+        self.storage.contains_key(&key)
     }
 }

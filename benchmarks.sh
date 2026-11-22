@@ -1,11 +1,11 @@
-#!/bin/bash
+#!/bin/sh
 
 cargo build --workspace --bins --release
 
 OS_INFO=$(uname -moprsv)
 
-echo -e "OS: $OS_INFO"
-echo -e
+echo "OS: $OS_INFO"
+echo;
 
 ./target/release/initialize
 ./target/release/readable

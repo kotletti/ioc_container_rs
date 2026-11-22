@@ -1,9 +1,8 @@
 use std::sync::{Arc, RwLock};
 
 use ioc_container_rs::{
-    adapters::{app_context::AppContext, di::DI},
     errors::error::Error,
-    ports::adapter_port::AdapterPort,
+    ports::{adapter_port::AdapterPort, context_port::ContextResolverPort},
 };
 
 pub trait StringPort: Send + Sync {
@@ -15,27 +14,17 @@ pub struct StringAdapter {
     message: RwLock<String>,
 }
 
-impl StringAdapter {
-    pub fn new() -> Self {
+impl Default for StringAdapter {
+    fn default() -> Self {
         Self {
             message: RwLock::new(String::from("Hello, World!")),
         }
     }
 }
 
-impl Default for StringAdapter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl AdapterPort<dyn StringPort> for StringAdapter {
-    fn construct(_: &Arc<AppContext>) -> Result<Arc<dyn StringPort>, Error> {
-        Ok(Arc::new(StringAdapter::new()))
-    }
-
-    async fn create_di(di: DI) -> Result<DI, Error> {
-        di.bind::<dyn StringPort, Self>()
+impl<Context: ContextResolverPort> AdapterPort<dyn StringPort, Context> for StringAdapter {
+    async fn construct(_: &Context) -> Result<Arc<dyn StringPort>, Error> {
+        Ok(Arc::new(Self::default()))
     }
 }
 
